@@ -1,0 +1,14 @@
+[package]
+name = "dd"
+version = "0.1.0"
+authors = ["Hiroyuki Okamura <okamu@hiroshima-u.ac.jp>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hashbrown = "0.11"
+
+[[bench]]
+name = "bench1"
+harness = false
