@@ -121,11 +121,11 @@ impl Node {
 
 #[derive(Debug)]
 pub struct BDD {
-    pub num_headers: usize,
-    pub num_nodes: usize,
+    num_headers: usize,
+    num_nodes: usize,
     zero: Node,
     one: Node,
-    pub utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
+    utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
     cache: HashMap<(OperationId, NodeId, NodeId), Node>,
 }
 
@@ -144,6 +144,10 @@ impl BDD {
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
+    }
+
+    pub fn size(&self) -> (usize, usize, usize) {
+        (self.num_headers, self.num_nodes, self.utable.len())
     }
     
     pub fn header(&mut self, level: Level, label: &str) -> NodeHeader {
@@ -312,12 +316,14 @@ impl BDD {
 
     pub fn clear(&mut self) {
         self.cache.clear();
-        self.utable.clear();
     }
     
-    pub fn make_utable(&mut self, f: &Node) {
+    pub fn rebuild(&mut self, fs: &[Node]) {
+        self.utable.clear();
         let mut visited = HashSet::new();
-        self.make_utable_(f, &mut visited);
+        for x in fs.iter() {
+            self.make_utable_(x, &mut visited);
+        }
     }
 
     fn make_utable_(&mut self, f: &Node, visited: &mut HashSet<Node>) {

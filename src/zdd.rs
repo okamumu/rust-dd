@@ -121,11 +121,11 @@ impl Node {
 
 #[derive(Debug)]
 pub struct ZDD {
-    pub num_headers: usize,
-    pub num_nodes: usize,
+    num_headers: usize,
+    num_nodes: usize,
     zero: Node,
     one: Node,
-    pub utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
+    utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
     cache: HashMap<(OperationId, NodeId, NodeId), Node>,
 }
 
@@ -145,6 +145,10 @@ impl ZDD {
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
+    }
+
+    pub fn size(&self) -> (usize, usize, usize) {
+        (self.num_headers, self.num_nodes, self.utable.len())
     }
     
     pub fn header(&mut self, level: Level, label: &str) -> NodeHeader {
@@ -341,12 +345,14 @@ impl ZDD {
 
     pub fn clear(&mut self) {
         self.cache.clear();
-        self.utable.clear();
     }
     
-    pub fn make_utable(&mut self, f: &Node) {
+    pub fn rebuild(&mut self, fs: &[Node]) {
+        self.utable.clear();
         let mut visited = HashSet::new();
-        self.make_utable_(f, &mut visited);
+        for x in fs.iter() {
+            self.make_utable_(x, &mut visited);
+        }
     }
 
     fn make_utable_(&mut self, f: &Node, visited: &mut HashSet<Node>) {
@@ -508,23 +514,4 @@ mod tests {
 
     }
 
-    // #[test]
-    // fn new_test5() {
-    //     let mut dd = ZDD::new();
-    //     let h1 = NodeHeader::new(0, 0, "x");
-    //     let h2 = NodeHeader::new(1, 1, "y");
-    //     let x = dd.create_node(&h1, &dd.get_zero(), &dd.get_one());
-    //     let y = dd.create_node(&h2, &dd.get_zero(), &dd.get_one());
-    //     let z = dd.or(&x, &y);
-    //     let z = dd.not(&z);
-
-    //     let mut buf = vec![];
-    //     {
-    //         let mut io = BufWriter::new(&mut buf);
-    //         dd.dot(&mut io, &z);
-    //     }
-    //     let s = std::str::from_utf8(&buf).unwrap();
-    //     println!("{}", s);
-
-    // }
 }

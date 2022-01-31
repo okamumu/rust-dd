@@ -15,7 +15,7 @@ fn bench_mdd1 () {
         }
     
         let end = start.elapsed();
-        println!("mdd3 node {}", f.num_nodes);
+        println!("mdd3 node {:?}", f.size());
         println!("mdd3 {} sec", end.as_secs_f64());
     }
 }
@@ -37,15 +37,15 @@ fn bench_mdd2 () {
         }
     
         let end = start.elapsed();
-        println!("mdd3 node {}", f.num_nodes);
+        println!("mdd3 node {:?}", f.size());
         println!("mdd3 rev {} sec", end.as_secs_f64());
     }
     {
         let start = std::time::Instant::now();
         f.clear();
-        f.make_utable(&b);
+        f.rebuild(&vec![b]);
         let end = start.elapsed();
-        println!("mdd3 node {}", f.utable.len());
+        println!("mdd3 node {:?}", f.size());
         println!("mdd3 clear {} sec", end.as_secs_f64());
     }
 }
@@ -66,7 +66,7 @@ fn bench_bdd1 () {
     }
 
     let end = start.elapsed();
-    println!("bdd2 node {}", f.num_nodes);
+    println!("bdd2 node {:?}", f.size());
     println!("bdd2 {} sec", end.as_secs_f64());
 }
 
@@ -86,15 +86,15 @@ fn bench_bdd2 () {
         }
     
         let end = start.elapsed();
-        println!("bdd2 node {}", f.num_nodes);
+        println!("bdd2 node {:?}", f.size());
         println!("bdd2 rev {} sec", end.as_secs_f64());
     }
     {
         let start = std::time::Instant::now();
         f.clear();
-        f.make_utable(&b);
+        f.rebuild(&vec![b]);
         let end = start.elapsed();
-        println!("bdd2 node {}", f.utable.len());
+        println!("bdd2 node {:?}", f.size());
         println!("bdd2 clear {} sec", end.as_secs_f64());
     }
 }

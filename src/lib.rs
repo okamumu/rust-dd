@@ -1,5 +1,5 @@
 pub mod bdd;
 pub mod zdd;
 pub mod mdd;
-pub mod evmdd;
+pub mod ev_plus_mdd;
 

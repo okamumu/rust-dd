@@ -138,18 +138,18 @@ impl Node {
 }
 
 #[derive(Debug)]
-pub struct EVplusMDD {
-    pub num_headers: usize,
-    pub num_nodes: usize,
+pub struct EVMDD {
+    num_headers: usize,
+    num_nodes: usize,
     omega: Node,
     infinity: Node,
-    pub utable: HashMap<(HeaderId, Box<[(EdgeValue,NodeId)]>), Node>,
+    utable: HashMap<(HeaderId, Box<[(EdgeValue,NodeId)]>), Node>,
     cache: HashMap<(OperationId, NodeId, NodeId, EdgeValue), Edge>,
 }
 
 const MIN: OperationId = 1;
 
-impl EVplusMDD {
+impl EVMDD {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
@@ -159,6 +159,10 @@ impl EVplusMDD {
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
+    }
+
+    pub fn size(&self) -> (usize, usize, usize) {
+        (self.num_headers, self.num_nodes, self.utable.len())
     }
     
     pub fn header(&mut self, level: Level, label: &str, edge_num: usize) -> NodeHeader {
@@ -236,10 +240,10 @@ impl EVplusMDD {
     
     pub fn clear(&mut self) {
         self.cache.clear();
-        self.utable.clear();
     }
     
     // pub fn make_utable(&mut self, f: &Node) {
+    // self.utable.clear();
     //     let mut visited = HashSet::new();
     //     self.make_utable_(f, &mut visited);
     // }
@@ -342,7 +346,7 @@ mod tests {
 
     #[test]
     fn new_test1() {
-        let mut dd = EVplusMDD::new();
+        let mut dd = EVMDD::new();
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = dd.create_node(&h, &vec![Edge::new(1, dd.get_omega()), Edge::new(2, dd.get_omega())]);
         println!("{:?}", x);
@@ -353,7 +357,7 @@ mod tests {
 
     #[test]
     fn new_test2() {
-        let mut dd = EVplusMDD::new();
+        let mut dd = EVMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &vec![Edge::new(1, dd.get_omega()), Edge::new(2, dd.get_omega())]);
@@ -367,7 +371,7 @@ mod tests {
     
     #[test]
     fn new_test3() {
-        let mut dd = EVplusMDD::new();
+        let mut dd = EVMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let h3 = NodeHeader::new(2, 2, "z", 3);
@@ -389,7 +393,7 @@ mod tests {
 
     #[test]
     fn new_test4() {
-        let mut dd = EVplusMDD::new();
+        let mut dd = EVMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let h3 = NodeHeader::new(2, 2, "z", 3);
@@ -411,7 +415,7 @@ mod tests {
 
     #[test]
     fn new_test5() {
-        let mut dd = EVplusMDD::new();
+        let mut dd = EVMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let h3 = NodeHeader::new(2, 2, "z", 3);
