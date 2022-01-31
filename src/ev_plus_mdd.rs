@@ -211,6 +211,7 @@ impl EVMDD {
             Some(x) => Edge::new(x.value + mu, x.node.clone()),
             None => {
                 let edge = match (f, g) {
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == false && gnode.value == false => Edge::new(0, self.get_infinity()),
                     (Node::Terminal(fnode), _) if fnode.value == false => Edge::new(gv, g.clone()),
                     (_, Node::Terminal(gnode)) if gnode.value == false => Edge::new(fv, f.clone()),
                     (Node::Terminal(fnode), _) if fnode.value == true => Edge::new(mu, self.get_omega()),
@@ -274,7 +275,7 @@ impl EVMDD {
         io.write(s2.as_bytes()).unwrap();
     }
 
-    pub fn dot_<T>(&self, io: &mut T, f: &Node, visited: &mut HashSet<Node>) where T: std::io::Write {
+    pub fn dot2_<T>(&self, io: &mut T, f: &Node, visited: &mut HashSet<Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
@@ -294,6 +295,39 @@ impl EVMDD {
                     self.dot_(io, &x.node, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}:{}\"];\n", fnode.id, x.node.get_id(), i, x.value);
                     io.write(s.as_bytes()).unwrap();
+                }
+            },
+            _ => (),
+        };
+        visited.insert(f.clone());
+    }
+
+    pub fn dot_<T>(&self, io: &mut T, f: &Node, visited: &mut HashSet<Node>) where T: std::io::Write {
+        if visited.contains(f) {
+            return
+        }
+        match f {
+            // Node::Terminal(fnode) if fnode.value == false => {
+            //     let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, "infinity");
+            //     io.write(s.as_bytes()).unwrap();
+            // },
+            Node::Terminal(fnode) if fnode.value == true => {
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, "omega");
+                io.write(s.as_bytes()).unwrap();
+            },
+            Node::NonTerminal(fnode) => {
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label);
+                io.write(s.as_bytes()).unwrap();
+                for (i,e) in fnode.edges.iter().enumerate() {
+                    self.dot_(io, &e.node, visited);
+                    if &e.node != &self.infinity {
+                        let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id, e.node.get_id(), e.value, e.value);
+                        io.write(s.as_bytes()).unwrap();
+                        let s = format!("\"obj{}\" -> \"obj{}:{}:{}\" [label=\"{}\", arrowhead=none];\n", fnode.id, fnode.id, e.node.get_id(), e.value, i);
+                        io.write(s.as_bytes()).unwrap();
+                        let s = format!("\"obj{}:{}:{}\" -> \"obj{}\";\n", fnode.id, e.node.get_id(), e.value, e.node.get_id());
+                        io.write(s.as_bytes()).unwrap();
+                    }
                 }
             },
             _ => (),
