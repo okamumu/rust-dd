@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
 
-use std::collections::{HashMap, HashSet};
-// use hashbrown::{HashMap, HashSet};
+// use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 type HeaderId = usize;
 type NodeId = usize;

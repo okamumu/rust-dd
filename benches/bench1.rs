@@ -1,7 +1,3 @@
-#![feature(test)]
-extern crate test;
-
-// // #[bench]
 fn bench_mdd1 () {
     use dd::mdd::*;
     let n = 1000;
