@@ -2,9 +2,9 @@ fn bench_mdd1 () {
     use dd::mdd::*;
     let n = 1000;
     let mut f = MDD::new();
-    let mut b = f.get_one();
+    let mut b = f.one();
     {
-        let v = vec![f.get_zero(), f.get_zero(), f.get_zero(), f.get_zero(), f.get_one()];
+        let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i), 5)).collect::<Vec<_>>();
         let x = (0..n).into_iter().map(|i| f.node(&h[i], &v).unwrap()).collect::<Vec<_>>();
     
@@ -24,9 +24,9 @@ fn bench_mdd2 () {
     use dd::mdd::*;
     let n = 1000;
     let mut f = MDD::new();
-    let mut b = f.get_one();
+    let mut b = f.one();
     {
-        let v = vec![f.get_zero(), f.get_zero(), f.get_zero(), f.get_zero(), f.get_one()];
+        let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i), 5)).collect::<Vec<_>>();
         let x = (0..n).into_iter().map(|i| f.node(&h[i], &v).unwrap()).collect::<Vec<_>>();
     
@@ -55,9 +55,9 @@ fn bench_bdd1 () {
     let n = 1000;
     let mut f = BDD::new();
     let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
-    let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.get_zero(), f.get_one()]).unwrap()).collect::<Vec<_>>();
+    let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
 
-    let mut b = f.get_one();
+    let mut b = f.one();
 
     let start = std::time::Instant::now();
 
@@ -74,10 +74,10 @@ fn bench_bdd2 () {
     use dd::bdd::*;
     let n = 1000;
     let mut f = BDD::new();
-    let mut b = f.get_one();
+    let mut b = f.one();
     {
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
-        let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.get_zero(), f.get_one()]).unwrap()).collect::<Vec<_>>();
+        let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
     
         let start = std::time::Instant::now();
     

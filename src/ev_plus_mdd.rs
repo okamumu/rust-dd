@@ -7,9 +7,15 @@ use hashbrown::{HashMap, HashSet};
 
 type HeaderId = usize;
 type NodeId = usize;
-type OperationId = usize;
 type Level = usize;
 type EdgeValue = i64;
+
+#[derive(Debug,PartialEq,Eq,Hash)]
+enum Operation {
+    MIN,
+    MAX,
+    PLUS,
+}
 
 #[derive(Debug)]
 pub struct NodeHeaderData {
@@ -92,7 +98,7 @@ pub enum Node {
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.get_id() == other.get_id()
+        self.id() == other.id()
     }
 }
 
@@ -100,7 +106,7 @@ impl Eq for Node {}
 
 impl Hash for Node {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.get_id().hash(state);
+        self.id().hash(state);
     }
 }
 
@@ -122,14 +128,14 @@ impl Node {
         Node::Terminal(Rc::new(x))
     }
     
-    pub fn get_id(&self) -> NodeId {
+    pub fn id(&self) -> NodeId {
         match self {
             Node::NonTerminal(x) => x.id,
             Node::Terminal(x) => x.id,
         }        
     }
 
-    pub fn get_header(&self) -> Option<&NodeHeader> {
+    pub fn header(&self) -> Option<&NodeHeader> {
         match self {
             Node::NonTerminal(x) => Some(&x.header),
             _ => None,
@@ -144,10 +150,8 @@ pub struct EVMDD {
     omega: Node,
     infinity: Node,
     utable: HashMap<(HeaderId, Box<[(EdgeValue,NodeId)]>), Node>,
-    cache: HashMap<(OperationId, NodeId, NodeId, EdgeValue), Edge>,
+    cache: HashMap<(Operation, NodeId, NodeId, EdgeValue), Edge>,
 }
-
-const MIN: OperationId = 1;
 
 impl EVMDD {
     pub fn new() -> Self {
@@ -184,7 +188,7 @@ impl EVMDD {
             return edges[0].node.clone()
         }
         
-        let key = (h.id, edges.iter().map(|x| (x.value, x.node.get_id())).collect::<Vec<_>>().into_boxed_slice());
+        let key = (h.id, edges.iter().map(|x| (x.value, x.node.id())).collect::<Vec<_>>().into_boxed_slice());
         match self.utable.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -196,49 +200,145 @@ impl EVMDD {
         }
     }
     
-    pub fn get_omega(&self) -> Node {
+    pub fn omega(&self) -> Node {
         self.omega.clone()
     }
     
-    pub fn get_infinity(&self) -> Node {
+    pub fn infinity(&self) -> Node {
         self.infinity.clone()
     }
 
     pub fn min(&mut self, fv: EdgeValue, f: &Node, gv: EdgeValue, g: &Node) -> Edge {
         let mu = std::cmp::min(fv, gv);
-        let key = (MIN, f.get_id(), g.get_id(), fv-gv);
+        let key = (Operation::MIN, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {
-            Some(x) => Edge::new(x.value + mu, x.node.clone()),
+            Some(x) => Edge::new(mu+x.value, x.node.clone()),
             None => {
-                let edge = match (f, g) {
-                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == false && gnode.value == false => Edge::new(0, self.get_infinity()),
+                match (f, g) {
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == false && gnode.value == false => Edge::new(0, self.infinity()),
                     (Node::Terminal(fnode), _) if fnode.value == false => Edge::new(gv, g.clone()),
                     (_, Node::Terminal(gnode)) if gnode.value == false => Edge::new(fv, f.clone()),
-                    (Node::Terminal(fnode), _) if fnode.value == true => Edge::new(mu, self.get_omega()),
-                    (_, Node::Terminal(gnode)) if gnode.value == true => Edge::new(mu, self.get_omega()),
+                    (Node::Terminal(fnode), _) if fnode.value == true => Edge::new(mu, self.omega()),
+                    (_, Node::Terminal(gnode)) if gnode.value == true => Edge::new(mu, self.omega()),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
                         let edges = fnode.edges.iter()
-                            .map(|fedge| self.min(fv+fedge.value, &fedge.node, 0, g)).collect::<Vec<_>>();
-                        Edge::new(0, self.create_node(&fnode.header, &edges))
+                            .map(|fedge| self.min(fv+fedge.value, &fedge.node, gv, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(0, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
                         let edges = gnode.edges.iter()
-                            .map(|gedge| self.min(0, f, gv+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        Edge::new(0, self.create_node(&gnode.header, &edges))
+                            .map(|gedge| self.min(fv, f, gv+gedge.value, &gedge.node)).collect::<Vec<_>>();
+                        let edge = Edge::new(0, self.create_node(&gnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
                         let edges = fnode.edges.iter().zip(gnode.edges.iter())
                             .map(|(fedge,gedge)| self.min(fv-mu+fedge.value, &fedge.node, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        Edge::new(mu, self.create_node(&fnode.header, &edges))
+                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
                     },
                     _ => panic!("error"),
-                };
-                self.cache.insert(key, edge.clone());
-                edge
+                }
             }
         }
     }
     
+    pub fn max(&mut self, fv: EdgeValue, f: &Node, gv: EdgeValue, g: &Node) -> Edge {
+        let mu = std::cmp::min(fv, gv);
+        let key = (Operation::MAX, f.id(), g.id(), fv-gv);
+        match self.cache.get(&key) {
+            Some(x) => Edge::new(mu+x.value, x.node.clone()),
+            None => {
+                match (f, g) {
+                    (Node::Terminal(fnode), _) if fnode.value == false => Edge::new(0, self.infinity()),
+                    (_, Node::Terminal(gnode)) if gnode.value == false => Edge::new(0, self.infinity()),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == true && gnode.value == true => Edge::new(std::cmp::max(fv, gv), self.omega()),
+                    (Node::Terminal(fnode), Node::NonTerminal(_)) if fnode.value == true && fv <= gv => Edge::new(gv, g.clone()),
+                    (Node::NonTerminal(_), Node::Terminal(gnode)) if gnode.value == true && fv >= gv => Edge::new(fv, f.clone()),
+                    (Node::Terminal(fnode), Node::NonTerminal(gnode)) if fnode.value == true && fv > gv => {
+                        let edges = gnode.edges.iter()
+                            .map(|gedge| self.max(fv-mu, f, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&gnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(gnode)) if gnode.value == true && fv < gv => {
+                        let edges = fnode.edges.iter()
+                            .map(|fedge| self.max(fv-mu+fedge.value, &fedge.node, gv-mu, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                        let edges = fnode.edges.iter()
+                            .map(|fedge| self.max(fv-mu+fedge.value, &fedge.node, gv-mu, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                        let edges = gnode.edges.iter()
+                            .map(|gedge| self.max(fv-mu, f, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&gnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                        let edges = fnode.edges.iter().zip(gnode.edges.iter())
+                            .map(|(fedge,gedge)| self.max(fv-mu+fedge.value, &fedge.node, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    _ => panic!("error"),
+                }
+            }
+        }
+    }
+
+    pub fn plus(&mut self, fv: EdgeValue, f: &Node, gv: EdgeValue, g: &Node) -> Edge {
+        let mu = std::cmp::min(fv, gv);
+        let key = (Operation::PLUS, f.id(), g.id(), fv-gv);
+        match self.cache.get(&key) {
+            Some(x) => Edge::new(2*mu+x.value, x.node.clone()),
+            None => {
+                match (f, g) {
+                    (Node::Terminal(fnode), _) if fnode.value == false => Edge::new(0, self.infinity()),
+                    (_, Node::Terminal(gnode)) if gnode.value == false => Edge::new(0, self.infinity()),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == true && gnode.value == true => Edge::new(fv+gv, self.omega()),
+                    (Node::Terminal(fnode), Node::NonTerminal(_)) if fnode.value == true => Edge::new(fv+gv, g.clone()),
+                    (Node::NonTerminal(_), Node::Terminal(gnode)) if gnode.value == true => Edge::new(fv+gv, f.clone()),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                        let edges = fnode.edges.iter()
+                            .map(|fedge| self.plus(fv-mu+fedge.value, &fedge.node, gv-mu, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                        let edges = gnode.edges.iter()
+                            .map(|gedge| self.plus(fv-mu, f, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(&gnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                        let edges = fnode.edges.iter().zip(gnode.edges.iter())
+                            .map(|(fedge,gedge)| self.plus(fv-mu+fedge.value, &fedge.node, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
+                        let edge = Edge::new(2*mu, self.create_node(&fnode.header, &edges));
+                        self.cache.insert(key, edge.clone());
+                        edge
+                    },
+                    _ => panic!("error"),
+                }
+            }
+        }
+    }
+
     pub fn clear(&mut self) {
         self.cache.clear();
     }
@@ -255,7 +355,7 @@ impl EVMDD {
     //     }
     //     match f {
     //         Node::NonTerminal(fnode) => {
-    //             let key = (fnode.header.id, fnode.nodes.iter().map(|x| x.get_id()).collect::<Vec<_>>().into_boxed_slice());
+    //             let key = (fnode.header.id, fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
     //             self.utable.insert(key, f.clone());
     //             for x in fnode.nodes.iter() {
     //                 self.make_utable_(&x, visited);
@@ -273,33 +373,6 @@ impl EVMDD {
         io.write(s1.as_bytes()).unwrap();
         self.dot_(io, f, &mut visited);
         io.write(s2.as_bytes()).unwrap();
-    }
-
-    pub fn dot2_<T>(&self, io: &mut T, f: &Node, visited: &mut HashSet<Node>) where T: std::io::Write {
-        if visited.contains(f) {
-            return
-        }
-        match f {
-            Node::Terminal(fnode) if fnode.value == false => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, "infinity");
-                io.write(s.as_bytes()).unwrap();
-            },
-            Node::Terminal(fnode) if fnode.value == true => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, "omega");
-                io.write(s.as_bytes()).unwrap();
-            },
-            Node::NonTerminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label);
-                io.write(s.as_bytes()).unwrap();
-                for (i,x) in fnode.edges.iter().enumerate() {
-                    self.dot_(io, &x.node, visited);
-                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}:{}\"];\n", fnode.id, x.node.get_id(), i, x.value);
-                    io.write(s.as_bytes()).unwrap();
-                }
-            },
-            _ => (),
-        };
-        visited.insert(f.clone());
     }
 
     pub fn dot_<T>(&self, io: &mut T, f: &Node, visited: &mut HashSet<Node>) where T: std::io::Write {
@@ -321,11 +394,11 @@ impl EVMDD {
                 for (i,e) in fnode.edges.iter().enumerate() {
                     self.dot_(io, &e.node, visited);
                     if &e.node != &self.infinity {
-                        let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id, e.node.get_id(), e.value, e.value);
+                        let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id, e.node.id(), e.value, e.value);
                         io.write(s.as_bytes()).unwrap();
-                        let s = format!("\"obj{}\" -> \"obj{}:{}:{}\" [label=\"{}\", arrowhead=none];\n", fnode.id, fnode.id, e.node.get_id(), e.value, i);
+                        let s = format!("\"obj{}\" -> \"obj{}:{}:{}\" [label=\"{}\", arrowhead=none];\n", fnode.id, fnode.id, e.node.id(), e.value, i);
                         io.write(s.as_bytes()).unwrap();
-                        let s = format!("\"obj{}:{}:{}\" -> \"obj{}\";\n", fnode.id, e.node.get_id(), e.value, e.node.get_id());
+                        let s = format!("\"obj{}:{}:{}\" -> \"obj{}\";\n", fnode.id, e.node.id(), e.value, e.node.id());
                         io.write(s.as_bytes()).unwrap();
                     }
                 }
@@ -343,9 +416,35 @@ mod tests {
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
-    //         println!("Dropping Node{}", self.get_id());
+    //         println!("Dropping Node{}", self.id());
     //     }
     // }
+
+    pub fn table(dd: &EVMDD, fv: EdgeValue, f: &Node) -> Vec<(Vec<usize>,Option<EdgeValue>)> {
+        let mut tab = Vec::new();
+        let p = Vec::new();
+        table_(dd, f, &p, &mut tab, fv);
+        tab
+    }
+
+    pub fn table_(dd: &EVMDD, f: &Node, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<EdgeValue>)>, s: EdgeValue) {
+        match f {
+            Node::Terminal(fnode) if fnode.value == false => {
+                tab.push((path.to_vec(), None));
+            },
+            Node::Terminal(fnode) if fnode.value == true => {
+                tab.push((path.to_vec(), Some(s)));
+            },
+            Node::NonTerminal(fnode) => {
+                for (i,e) in fnode.edges.iter().enumerate() {
+                    let mut p = path.to_vec();
+                    p.push(i);
+                    table_(dd, &e.node, &p, tab, s + e.value);
+                }
+            },
+            _ => (),
+        };
+    }
 
     #[test]
     fn new_header() {
@@ -375,18 +474,18 @@ mod tests {
         if let Node::NonTerminal(x) = &x {
             println!("{:?}", x.header);
         }
-        println!("{:?}", x.get_header());
+        println!("{:?}", x.header());
     }
 
     #[test]
     fn new_test1() {
         let mut dd = EVMDD::new();
         let h = NodeHeader::new(0, 0, "x", 2);
-        let x = dd.create_node(&h, &vec![Edge::new(1, dd.get_omega()), Edge::new(2, dd.get_omega())]);
+        let x = dd.create_node(&h, &vec![Edge::new(1, dd.omega()), Edge::new(2, dd.omega())]);
         println!("{:?}", x);
-        let y = dd.create_node(&h, &vec![Edge::new(1, dd.get_omega()), Edge::new(2, dd.get_omega())]);
+        let y = dd.create_node(&h, &vec![Edge::new(1, dd.omega()), Edge::new(2, dd.omega())]);
         println!("{:?}", y);
-        println!("{:?}", Rc::strong_count(y.get_header().unwrap()));
+        println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
 
     #[test]
@@ -394,13 +493,13 @@ mod tests {
         let mut dd = EVMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
-        let x = dd.create_node(&h1, &vec![Edge::new(1, dd.get_omega()), Edge::new(2, dd.get_omega())]);
-        let y = dd.create_node(&h2, &vec![Edge::new(1, dd.get_omega()), Edge::new(2, dd.get_omega())]);
+        let x = dd.create_node(&h1, &vec![Edge::new(1, dd.omega()), Edge::new(2, dd.omega())]);
+        let y = dd.create_node(&h2, &vec![Edge::new(1, dd.omega()), Edge::new(2, dd.omega())]);
         let z = dd.min(0, &x, 0, &y);
         println!("{:?}", x);
         println!("{:?}", y);
         println!("{:?}", z);
-        println!("{:?}", Rc::strong_count(y.get_header().unwrap()));
+        println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
     
     #[test]
@@ -410,8 +509,8 @@ mod tests {
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let h3 = NodeHeader::new(2, 2, "z", 3);
         
-        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_omega()), Edge::new(0, dd.get_infinity())]);
-        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_infinity()), Edge::new(0, dd.get_omega())]);
+        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(0, dd.infinity())]);
+        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
         let f21 = dd.create_node(&h2, &vec![Edge::new(0, f11.clone()), Edge::new(2, f11.clone())]);
         let f22 = dd.create_node(&h2, &vec![Edge::new(1, f11.clone()), Edge::new(0, f12.clone())]);
         let f = dd.create_node(&h3, &vec![Edge::new(0, f21.clone()), Edge::new(1, f22.clone()), Edge::new(2, f22.clone())]);
@@ -423,6 +522,10 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
+
+        for x in table(&dd, 0, &f) {
+            println!("{:?}", x);
+        }
     }
 
     #[test]
@@ -432,9 +535,9 @@ mod tests {
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let h3 = NodeHeader::new(2, 2, "z", 3);
         
-        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_omega()), Edge::new(2, dd.get_omega())]);
-        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_infinity()), Edge::new(0, dd.get_omega())]);
-        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.get_infinity())]);
+        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(2, dd.omega())]);
+        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.infinity())]);
         let g22 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(2, g12.clone())]);
         let g = dd.create_node(&h3, &vec![Edge::new(0, g21.clone()), Edge::new(2, g21.clone()), Edge::new(1, g22.clone())]);
 
@@ -445,6 +548,10 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
+
+        for x in table(&dd, 0, &g) {
+            println!("{:?}", x);
+        }
     }
 
     #[test]
@@ -454,15 +561,15 @@ mod tests {
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let h3 = NodeHeader::new(2, 2, "z", 3);
         
-        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_omega()), Edge::new(0, dd.get_infinity())]);
-        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_infinity()), Edge::new(0, dd.get_omega())]);
+        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(0, dd.infinity())]);
+        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
         let f21 = dd.create_node(&h2, &vec![Edge::new(0, f11.clone()), Edge::new(2, f11.clone())]);
         let f22 = dd.create_node(&h2, &vec![Edge::new(1, f11.clone()), Edge::new(0, f12.clone())]);
         let f = dd.create_node(&h3, &vec![Edge::new(0, f21.clone()), Edge::new(1, f22.clone()), Edge::new(2, f22.clone())]);
 
-        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_omega()), Edge::new(2, dd.get_omega())]);
-        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.get_infinity()), Edge::new(0, dd.get_omega())]);
-        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.get_infinity())]);
+        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(2, dd.omega())]);
+        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.infinity())]);
         let g22 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(2, g12.clone())]);
         let g = dd.create_node(&h3, &vec![Edge::new(0, g21.clone()), Edge::new(2, g21.clone()), Edge::new(1, g22.clone())]);
 
@@ -475,6 +582,78 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
+
+        for x in table(&dd, z.value, &z.node) {
+            println!("{:?}", x);
+        }
+    }
+
+    #[test]
+    fn new_test6() {
+        let mut dd = EVMDD::new();
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
+        let h3 = NodeHeader::new(2, 2, "z", 3);
+        
+        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(0, dd.infinity())]);
+        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let f21 = dd.create_node(&h2, &vec![Edge::new(0, f11.clone()), Edge::new(2, f11.clone())]);
+        let f22 = dd.create_node(&h2, &vec![Edge::new(1, f11.clone()), Edge::new(0, f12.clone())]);
+        let f = dd.create_node(&h3, &vec![Edge::new(0, f21.clone()), Edge::new(1, f22.clone()), Edge::new(2, f22.clone())]);
+
+        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(2, dd.omega())]);
+        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.infinity())]);
+        let g22 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(2, g12.clone())]);
+        let g = dd.create_node(&h3, &vec![Edge::new(0, g21.clone()), Edge::new(2, g21.clone()), Edge::new(1, g22.clone())]);
+
+        let z = dd.max(0, &f, 0, &g);
+
+        let mut buf = vec![];
+        {
+            let mut io = BufWriter::new(&mut buf);
+            dd.dot(&mut io, &z.node);
+        }
+        let s = std::str::from_utf8(&buf).unwrap();
+        println!("{}", s);
+
+        for x in table(&dd, z.value, &z.node) {
+            println!("{:?}", x);
+        }
+    }
+
+    #[test]
+    fn new_test_plus() {
+        let mut dd = EVMDD::new();
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
+        let h3 = NodeHeader::new(2, 2, "z", 3);
+        
+        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(0, dd.infinity())]);
+        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let f21 = dd.create_node(&h2, &vec![Edge::new(0, f11.clone()), Edge::new(2, f11.clone())]);
+        let f22 = dd.create_node(&h2, &vec![Edge::new(1, f11.clone()), Edge::new(0, f12.clone())]);
+        let f = dd.create_node(&h3, &vec![Edge::new(0, f21.clone()), Edge::new(1, f22.clone()), Edge::new(2, f22.clone())]);
+
+        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(2, dd.omega())]);
+        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.infinity())]);
+        let g22 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(2, g12.clone())]);
+        let g = dd.create_node(&h3, &vec![Edge::new(0, g21.clone()), Edge::new(2, g21.clone()), Edge::new(1, g22.clone())]);
+
+        let z = dd.plus(0, &f, 0, &g);
+
+        let mut buf = vec![];
+        {
+            let mut io = BufWriter::new(&mut buf);
+            dd.dot(&mut io, &z.node);
+        }
+        let s = std::str::from_utf8(&buf).unwrap();
+        println!("{}", s);
+
+        for x in table(&dd, z.value, &z.node) {
+            println!("{:?}", x);
+        }
     }
 
     // #[test]
@@ -482,8 +661,8 @@ mod tests {
     //     let mut dd = MDD::new();
     //     let h1 = NodeHeader::new(0, 0, "x", 2);
     //     let h2 = NodeHeader::new(1, 1, "y", 2);
-    //     let x = dd.create_node(&h1, &vec![dd.get_zero(), dd.get_one()]);
-    //     let y = dd.create_node(&h2, &vec![dd.get_zero(), dd.get_one()]);
+    //     let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
+    //     let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
     //     let z = dd.or(&x, &y);
 
     //     let mut buf = vec![];
@@ -500,8 +679,8 @@ mod tests {
     //     let mut dd = MDD::new();
     //     let h1 = NodeHeader::new(0, 0, "x", 2);
     //     let h2 = NodeHeader::new(1, 1, "y", 2);
-    //     let x = dd.create_node(&h1, &vec![dd.get_zero(), dd.get_one()]);
-    //     let y = dd.create_node(&h2, &vec![dd.get_zero(), dd.get_one()]);
+    //     let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
+    //     let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
     //     let z = dd.and(&x, &y);
     //     let z = dd.not(&z);
 

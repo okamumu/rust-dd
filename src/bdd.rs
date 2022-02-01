@@ -7,8 +7,15 @@ use hashbrown::{HashMap, HashSet};
 
 type HeaderId = usize;
 type NodeId = usize;
-type OperationId = usize;
 type Level = usize;
+
+#[derive(Debug,PartialEq,Eq,Hash)]
+enum Operation {
+    NOT,
+    AND,
+    OR,
+    XOR,
+}
 
 #[derive(Debug)]
 pub struct NodeHeaderData {
@@ -74,7 +81,7 @@ pub enum Node {
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.get_id() == other.get_id()
+        self.id() == other.id()
     }
 }
 
@@ -82,7 +89,7 @@ impl Eq for Node {}
 
 impl Hash for Node {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.get_id().hash(state);
+        self.id().hash(state);
     }
 }
 
@@ -104,14 +111,14 @@ impl Node {
         Node::Terminal(Rc::new(x))
     }
     
-    pub fn get_id(&self) -> NodeId {
+    pub fn id(&self) -> NodeId {
         match self {
             Node::NonTerminal(x) => x.id,
             Node::Terminal(x) => x.id,
         }        
     }
 
-    pub fn get_header(&self) -> Option<&NodeHeader> {
+    pub fn header(&self) -> Option<&NodeHeader> {
         match self {
             Node::NonTerminal(x) => Some(&x.header),
             _ => None,
@@ -126,13 +133,8 @@ pub struct BDD {
     zero: Node,
     one: Node,
     utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
-    cache: HashMap<(OperationId, NodeId, NodeId), Node>,
+    cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
-
-const NOT: OperationId = 0;
-const AND: OperationId = 1;
-const OR: OperationId = 2;
-const XOR: OperationId = 3;
 
 impl BDD {
     pub fn new() -> Self {
@@ -169,7 +171,7 @@ impl BDD {
             return low.clone()
         }
         
-        let key = (h.id, low.get_id(), high.get_id());
+        let key = (h.id, low.id(), high.id());
         match self.utable.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -181,22 +183,22 @@ impl BDD {
         }
     }
     
-    pub fn get_zero(&self) -> Node {
+    pub fn zero(&self) -> Node {
         self.zero.clone()
     }
     
-    pub fn get_one(&self) -> Node {
+    pub fn one(&self) -> Node {
         self.one.clone()
     }
 
     pub fn not(&mut self, f: &Node) -> Node {
-        let key = (NOT, f.get_id(), 0);
+        let key = (Operation::NOT, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match f {
-                    Node::Terminal(fnode) if fnode.value == false => self.get_one(),
-                    Node::Terminal(fnode) if fnode.value == true => self.get_zero(),
+                    Node::Terminal(fnode) if fnode.value == false => self.one(),
+                    Node::Terminal(fnode) if fnode.value == true => self.zero(),
                     Node::NonTerminal(fnode) => {
                         let low = self.not(&fnode.nodes[0]);
                         let high = self.not(&fnode.nodes[1]);
@@ -211,14 +213,14 @@ impl BDD {
     }
 
     pub fn and(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (AND, f.get_id(), g.get_id());
+        let key = (Operation::AND, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == false => self.get_zero(),
+                    (Node::Terminal(fnode), _) if fnode.value == false => self.zero(),
                     (Node::Terminal(fnode), _) if fnode.value == true => g.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == false => self.get_zero(),
+                    (_, Node::Terminal(gnode)) if gnode.value == false => self.zero(),
                     (_, Node::Terminal(gnode)) if gnode.value == true => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
                         let low = self.and(&fnode.nodes[0], g);
@@ -244,15 +246,15 @@ impl BDD {
     }
     
     pub fn or(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (OR, f.get_id(), g.get_id());
+        let key = (Operation::OR, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
                     (Node::Terminal(fnode), _) if fnode.value == false => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value == true => self.get_one(),
+                    (Node::Terminal(fnode), _) if fnode.value == true => self.one(),
                     (_, Node::Terminal(gnode)) if gnode.value == false => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == true => self.get_one(),
+                    (_, Node::Terminal(gnode)) if gnode.value == true => self.one(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
                         let low = self.or(&fnode.nodes[0], g);
                         let high = self.or(&fnode.nodes[1], g);
@@ -277,7 +279,7 @@ impl BDD {
     }
 
     pub fn xor(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (XOR, f.get_id(), g.get_id());
+        let key = (Operation::XOR, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -332,7 +334,7 @@ impl BDD {
         }
         match f {
             Node::NonTerminal(fnode) => {
-                let key = (fnode.header.id, fnode.nodes[0].get_id(), fnode.nodes[1].get_id());
+                let key = (fnode.header.id, fnode.nodes[0].id(), fnode.nodes[1].id());
                 self.utable.insert(key, f.clone());
                 for x in fnode.nodes.iter() {
                     self.make_utable_(&x, visited);
@@ -370,7 +372,7 @@ impl BDD {
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.nodes.iter().enumerate() {
                     self.dot_(io, x, visited);
-                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id, x.get_id(), i);
+                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id, x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
             },
@@ -387,7 +389,7 @@ mod tests {
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
-    //         println!("Dropping Node{}", self.get_id());
+    //         println!("Dropping Node{}", self.id());
     //     }
     // }
 
@@ -419,18 +421,18 @@ mod tests {
         if let Node::NonTerminal(x) = &x {
             println!("{:?}", x.header);
         }
-        println!("{:?}", x.get_header());
+        println!("{:?}", x.header());
     }
 
     #[test]
     fn new_test1() {
         let mut dd = BDD::new();
         let h = NodeHeader::new(0, 0, "x");
-        let x = dd.create_node(&h, &dd.get_zero(), &dd.get_one());
+        let x = dd.create_node(&h, &dd.zero(), &dd.one());
         println!("{:?}", x);
-        let y = dd.create_node(&h, &dd.get_zero(), &dd.get_one());
+        let y = dd.create_node(&h, &dd.zero(), &dd.one());
         println!("{:?}", y);
-        println!("{:?}", Rc::strong_count(y.get_header().unwrap()));
+        println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
 
     #[test]
@@ -438,13 +440,13 @@ mod tests {
         let mut dd = BDD::new();
         let h1 = NodeHeader::new(0, 0, "x");
         let h2 = NodeHeader::new(1, 1, "y");
-        let x = dd.create_node(&h1, &dd.get_zero(), &dd.get_one());
-        let y = dd.create_node(&h2, &dd.get_zero(), &dd.get_one());
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.and(&x, &y);
         println!("{:?}", x);
         println!("{:?}", y);
         println!("{:?}", z);
-        println!("{:?}", Rc::strong_count(y.get_header().unwrap()));
+        println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
     
     #[test]
@@ -452,8 +454,8 @@ mod tests {
         let mut dd = BDD::new();
         let h1 = NodeHeader::new(0, 0, "x");
         let h2 = NodeHeader::new(1, 1, "y");
-        let x = dd.create_node(&h1, &dd.get_zero(), &dd.get_one());
-        let y = dd.create_node(&h2, &dd.get_zero(), &dd.get_one());
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.and(&x, &y);
 
         let mut buf = vec![];
@@ -471,8 +473,8 @@ mod tests {
         let mut dd = BDD::new();
         let h1 = NodeHeader::new(0, 0, "x");
         let h2 = NodeHeader::new(1, 1, "y");
-        let x = dd.create_node(&h1, &dd.get_zero(), &dd.get_one());
-        let y = dd.create_node(&h2, &dd.get_zero(), &dd.get_one());
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.or(&x, &y);
 
         let mut buf = vec![];
@@ -490,8 +492,8 @@ mod tests {
         let mut dd = BDD::new();
         let h1 = NodeHeader::new(0, 0, "x");
         let h2 = NodeHeader::new(1, 1, "y");
-        let x = dd.create_node(&h1, &dd.get_zero(), &dd.get_one());
-        let y = dd.create_node(&h2, &dd.get_zero(), &dd.get_one());
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.or(&x, &y);
         let z = dd.not(&z);
 

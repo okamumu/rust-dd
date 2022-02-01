@@ -1,6 +1,8 @@
 use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
+use std::ops::{Add, Sub, Mul, Div};
+use std::fmt::Display;
 
 // use std::collections::{HashMap, HashSet};
 use hashbrown::{HashMap, HashSet};
@@ -11,10 +13,10 @@ type Level = usize;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    NOT,
-    AND,
-    OR,
-    XOR,
+    ADD,
+    SUB,
+    MUL,
+    DIV,
 }
 
 #[derive(Debug)]
@@ -62,42 +64,41 @@ impl NodeHeader {
     }
 }
 
-
 #[derive(Debug)]
-pub struct NonTerminalNode {
+pub struct NonTerminalNode<T> {
     id: NodeId,
     header: NodeHeader,
-    nodes: Box<[Node]>,
+    nodes: Box<[Node<T>]>,
 }
 
 #[derive(Debug)]
-pub struct TerminalNode {
+pub struct TerminalNode<T> {
     id: NodeId,
-    value: bool,
+    value: T,
 }
 
 #[derive(Debug,Clone)]
-pub enum Node {
-    NonTerminal(Rc<NonTerminalNode>),
-    Terminal(Rc<TerminalNode>),
+pub enum Node<T> {
+    NonTerminal(Rc<NonTerminalNode<T>>),
+    Terminal(Rc<TerminalNode<T>>),
 }
 
-impl PartialEq for Node {
+impl<T> PartialEq for Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
 }
 
-impl Eq for Node {}
+impl<T> Eq for Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {}
 
-impl Hash for Node {
+impl<T> Hash for Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl Node {
-    fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Node]) -> Self {
+impl<T> Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
+    fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Node<T>]) -> Self {
         let x = NonTerminalNode {
             id: id,
             header: header.clone(),
@@ -106,7 +107,7 @@ impl Node {
         Node::NonTerminal(Rc::new(x))
     }
 
-    fn new_terminal(id: NodeId, value: bool) -> Self {
+    fn new_terminal(id: NodeId, value: T) -> Self {
         let x = TerminalNode {
             id: id,
             value: value,
@@ -130,38 +131,48 @@ impl Node {
 }
 
 #[derive(Debug)]
-pub struct MDD {
+pub struct MtMDD<T> {
     num_headers: usize,
     num_nodes: usize,
-    zero: Node,
-    one: Node,
-    utable: HashMap<(HeaderId, Box<[NodeId]>), Node>,
-    cache: HashMap<(Operation, NodeId, NodeId), Node>,
+    values: HashMap<T,Node<T>>,
+    utable: HashMap<(HeaderId, Box<[NodeId]>), Node<T>>,
+    cache: HashMap<(Operation, NodeId, NodeId), Node<T>>,
 }
 
-impl MDD {
+impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
-            num_nodes: 2,
-            zero: Node::new_terminal(0, false),
-            one: Node::new_terminal(1, true),
+            num_nodes: 0,
+            values: HashMap::new(),
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
     }
 
-    pub fn size(&self) -> (usize, usize, usize) {
-        (self.num_headers, self.num_nodes, self.utable.len())
+    pub fn size(&self) -> (usize, usize, usize, usize) {
+        (self.values.len(), self.num_headers, self.num_nodes, self.utable.len())
     }
    
+    pub fn value(&mut self, value: T) -> Node<T> {
+        match self.values.get(&value) {
+            Some(x) => x.clone(),
+            None => {
+                let node = Node::new_terminal(self.num_nodes, value);
+                self.num_nodes += 1;
+                self.values.insert(value, node.clone());
+                node
+            }
+        }
+    }
+
     pub fn header(&mut self, level: Level, label: &str, edge_num: usize) -> NodeHeader {
         let h = NodeHeader::new(self.num_headers, level, label, edge_num);
         self.num_headers += 1;
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node<T>]) -> Result<Node<T>,String> {
         if h.edge_num == nodes.len() {
             Ok(self.create_node(h, nodes))
         } else {
@@ -169,7 +180,7 @@ impl MDD {
         }
     }
 
-    fn create_node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Node {
+    fn create_node(&mut self, h: &NodeHeader, nodes: &[Node<T>]) -> Node<T> {
         if nodes.iter().all(|x| &nodes[0] == x) {
             return nodes[0].clone()
         }
@@ -186,57 +197,31 @@ impl MDD {
         }
     }
     
-    pub fn zero(&self) -> Node {
-        self.zero.clone()
-    }
-    
-    pub fn one(&self) -> Node {
-        self.one.clone()
-    }
-
-    pub fn not(&mut self, f: &Node) -> Node {
-        let key = (Operation::NOT, f.id(), 0);
-        match self.cache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match f {
-                    Node::Terminal(fnode) if fnode.value == false => self.one(),
-                    Node::Terminal(fnode) if fnode.value == true => self.zero(),
-                    Node::NonTerminal(fnode) => {
-                        let nodes = fnode.nodes.iter().map(|f| self.not(f)).collect::<Vec<_>>();
-                        self.create_node(&fnode.header, &nodes)
-                    },
-                    _ => panic!("error"),
-                };
-                self.cache.insert(key, node.clone());
-                node
-            }
-        }
-    }
-
-    pub fn and(&mut self, f: &Node, g: &Node) -> Node {
-        // if f == g {
-        //     return f.clone()
-        // }
-        let key = (Operation::AND, f.id(), g.id());
+    pub fn add(&mut self, f: &Node<T>, g: &Node<T>) -> Node<T> {
+        let key = (Operation::ADD, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == false => self.zero(),
-                    (Node::Terminal(fnode), _) if fnode.value == true => g.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == false => self.zero(),
-                    (_, Node::Terminal(gnode)) if gnode.value == true => f.clone(),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value + gnode.value),
+                    (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
+                        let nodes = gnode.nodes.iter().map(|g| self.add(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(_gnode)) => {
+                        let nodes = fnode.nodes.iter().map(|f| self.add(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
-                        let nodes = fnode.nodes.iter().map(|f| self.and(f, g)).collect::<Vec<_>>();
+                        let nodes = fnode.nodes.iter().map(|f| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
-                        let nodes = gnode.nodes.iter().map(|g| self.and(f, g)).collect::<Vec<_>>();
+                        let nodes = gnode.nodes.iter().map(|g| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
-                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.and(f, g)).collect::<Vec<_>>();
+                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
                     _ => panic!("error"),
@@ -247,29 +232,31 @@ impl MDD {
         }
     }
     
-    pub fn or(&mut self, f: &Node, g: &Node) -> Node {
-        // if f == g {
-        //     return f.clone()
-        // }
-        let key = (Operation::OR, f.id(), g.id());
+    pub fn sub(&mut self, f: &Node<T>, g: &Node<T>) -> Node<T> {
+        let key = (Operation::SUB, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == false => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value == true => self.one(),
-                    (_, Node::Terminal(gnode)) if gnode.value == false => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == true => self.one(),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value - gnode.value),
+                    (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
+                        let nodes = gnode.nodes.iter().map(|g| self.sub(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(_gnode)) => {
+                        let nodes = fnode.nodes.iter().map(|f| self.sub(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
-                        let nodes = fnode.nodes.iter().map(|f| self.or(f, g)).collect::<Vec<_>>();
+                        let nodes = fnode.nodes.iter().map(|f| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
-                        let nodes = gnode.nodes.iter().map(|g| self.or(f, g)).collect::<Vec<_>>();
+                        let nodes = gnode.nodes.iter().map(|g| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
-                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.or(f, g)).collect::<Vec<_>>();
+                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
                     _ => panic!("error"),
@@ -280,26 +267,31 @@ impl MDD {
         }
     }
 
-    pub fn xor(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::XOR, f.id(), g.id());
+    pub fn mul(&mut self, f: &Node<T>, g: &Node<T>) -> Node<T> {
+        let key = (Operation::MUL, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == false => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value == true => self.not(g),
-                    (_, Node::Terminal(gnode)) if gnode.value == false => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == true => self.not(f),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value * gnode.value),
+                    (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
+                        let nodes = gnode.nodes.iter().map(|g| self.mul(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(_gnode)) => {
+                        let nodes = fnode.nodes.iter().map(|f| self.mul(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
-                        let nodes = fnode.nodes.iter().map(|f| self.xor(f, g)).collect::<Vec<_>>();
+                        let nodes = fnode.nodes.iter().map(|f| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
-                        let nodes = gnode.nodes.iter().map(|g| self.xor(f, g)).collect::<Vec<_>>();
+                        let nodes = gnode.nodes.iter().map(|g| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
-                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.xor(f, g)).collect::<Vec<_>>();
+                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
                     _ => panic!("error"),
@@ -310,11 +302,46 @@ impl MDD {
         }
     }
 
+    pub fn div(&mut self, f: &Node<T>, g: &Node<T>) -> Node<T> {
+        let key = (Operation::DIV, f.id(), g.id());
+        match self.cache.get(&key) {
+            Some(x) => x.clone(),
+            None => {
+                let node = match (f, g) {
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value * gnode.value),
+                    (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
+                        let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(_gnode)) => {
+                        let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                        let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                        let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    _ => panic!("error"),
+                };
+                self.cache.insert(key, node.clone());
+                node
+            }
+        }
+    }
+    
     pub fn clear(&mut self) {
         self.cache.clear();
     }
     
-    pub fn rebuild(&mut self, fs: &[Node]) {
+    pub fn rebuild(&mut self, fs: &[Node<T>]) {
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
@@ -322,7 +349,7 @@ impl MDD {
         }
     }
 
-    fn make_utable_(&mut self, f: &Node, visited: &mut HashSet<Node>) {
+    fn make_utable_(&mut self, f: &Node<T>, visited: &mut HashSet<Node<T>>) {
         if visited.contains(f) {
             return
         }
@@ -339,7 +366,7 @@ impl MDD {
         visited.insert(f.clone());
     }
 
-    pub fn dot<T>(&self, io: &mut T, f: &Node) where T: std::io::Write {
+    pub fn dot<U>(&self, io: &mut U, f: &Node<T>) where U: std::io::Write {
         let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
         let s2 = "}\n";
         let mut visited = HashSet::new();
@@ -348,17 +375,13 @@ impl MDD {
         io.write(s2.as_bytes()).unwrap();
     }
 
-    pub fn dot_<T>(&self, io: &mut T, f: &Node, visited: &mut HashSet<Node>) where T: std::io::Write {
+    pub fn dot_<U>(&self, io: &mut U, f: &Node<T>, visited: &mut HashSet<Node<T>>) where U: std::io::Write {
         if visited.contains(f) {
             return
         }
         match f {
-            Node::Terminal(fnode) if fnode.value == false => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, 0);
-                io.write(s.as_bytes()).unwrap();
-            },
-            Node::Terminal(fnode) if fnode.value == true => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, 1);
+            Node::Terminal(fnode) => {
+                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, fnode.value);
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
@@ -370,7 +393,6 @@ impl MDD {
                     io.write(s.as_bytes()).unwrap();
                 }
             },
-            _ => (),
         };
         visited.insert(f.clone());
     }
@@ -399,16 +421,16 @@ mod tests {
 
     #[test]
     fn new_terminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero = Node::new_terminal(0, 0);
+        let one = Node::new_terminal(1, 1);
         println!("{:?}", zero);
         println!("{:?}", one);
     }
 
     #[test]
     fn new_nonterminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero = Node::new_terminal(0, 0);
+        let one = Node::new_terminal(1, 1);
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = Node::new_nonterminal(3, &h, &vec![zero, one]);
         println!("{:?}", x);
@@ -420,23 +442,25 @@ mod tests {
 
     #[test]
     fn new_test1() {
-        let mut dd = MDD::new();
+        let mut dd = MtMDD::new();
         let h = NodeHeader::new(0, 0, "x", 2);
-        let x = dd.create_node(&h, &vec![dd.zero(), dd.one()]);
+        let v = vec![dd.value(0), dd.value(1)];
+        let x = dd.create_node(&h, &v);
         println!("{:?}", x);
-        let y = dd.create_node(&h, &vec![dd.zero(), dd.one()]);
+        let y = dd.create_node(&h, &v);
         println!("{:?}", y);
         println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
 
     #[test]
     fn new_test2() {
-        let mut dd = MDD::new();
+        let mut dd = MtMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
-        let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
-        let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
-        let z = dd.and(&x, &y);
+        let v = vec![dd.value(0), dd.value(1)];
+        let x = dd.create_node(&h1, &v);
+        let y = dd.create_node(&h2, &v);
+        let z = dd.add(&x, &y);
         println!("{:?}", x);
         println!("{:?}", y);
         println!("{:?}", z);
@@ -445,12 +469,13 @@ mod tests {
     
     #[test]
     fn new_test3() {
-        let mut dd = MDD::new();
+        let mut dd = MtMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
-        let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
-        let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
-        let z = dd.and(&x, &y);
+        let v = vec![dd.value(0), dd.value(1)];
+        let x = dd.create_node(&h1, &v);
+        let y = dd.create_node(&h2, &v);
+        let z = dd.add(&x, &y);
 
         let mut buf = vec![];
         {
@@ -463,31 +488,13 @@ mod tests {
 
     #[test]
     fn new_test4() {
-        let mut dd = MDD::new();
+        let mut dd = MtMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
-        let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
-        let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
-        let z = dd.or(&x, &y);
-
-        let mut buf = vec![];
-        {
-            let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z);
-        }
-        let s = std::str::from_utf8(&buf).unwrap();
-        println!("{}", s);
-    }
-
-    #[test]
-    fn new_test5() {
-        let mut dd = MDD::new();
-        let h1 = NodeHeader::new(0, 0, "x", 2);
-        let h2 = NodeHeader::new(1, 1, "y", 2);
-        let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
-        let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
-        let z = dd.and(&x, &y);
-        let z = dd.not(&z);
+        let v = vec![dd.value(0), dd.value(1)];
+        let x = dd.create_node(&h1, &v);
+        let y = dd.create_node(&h2, &v);
+        let z = dd.sub(&x, &y);
 
         let mut buf = vec![];
         {
