@@ -13,7 +13,29 @@ pub type HashSet<T> = std::collections::HashSet<T>;
 // pub type HashMap<T,U> = hashbrown::HashMap<T,U>;
 // pub type HashSet<T> = hashbrown::HashSet<T>;
 
-pub trait TerminalValue:
+pub trait TerminalBin:
+    Copy
+    + Clone
+    + PartialEq
+    + Eq
+    + Hash
+    + Display
+{
+    fn high() -> Self;
+    fn low() -> Self;
+}
+
+impl TerminalBin for bool {
+    fn high() -> Self { true }
+    fn low() -> Self { false }
+}
+
+impl TerminalBin for u8 {
+    fn high() -> Self { 1 }
+    fn low() -> Self { 0 }
+}
+
+pub trait TerminalNum:
     Copy
     + Clone
     + PartialEq
@@ -26,10 +48,10 @@ pub trait TerminalValue:
     + One
     {}
 
-impl TerminalValue for u32 {}
-impl TerminalValue for u64 {}
-impl TerminalValue for i32 {}
-impl TerminalValue for i64 {}
+impl TerminalNum for u32 {}
+impl TerminalNum for u64 {}
+impl TerminalNum for i32 {}
+impl TerminalNum for i64 {}
 
 pub trait EdgeValue:
     Copy

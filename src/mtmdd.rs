@@ -1,5 +1,4 @@
 use std::rc::Rc;
-use std::ops::Deref;
 use std::hash::{Hash, Hasher};
 use core::slice::Iter;
 
@@ -9,7 +8,7 @@ use crate::common::{
     Level,
     HashMap,
     HashSet,
-    TerminalValue,
+    TerminalNum,
     NodeHeader,
 };
 
@@ -30,7 +29,7 @@ pub struct NonTerminal<T> {
     nodes: Box<[Node<T>]>,
 }
 
-impl<T> NonTerminal<T> where T: TerminalValue {
+impl<T> NonTerminal<T> where T: TerminalNum {
     pub fn node_iter(&self) -> Iter<Node<T>> {
         self.nodes.iter()
     }
@@ -48,21 +47,21 @@ pub enum Node<T> {
     Terminal(Rc<Terminal<T>>),
 }
 
-impl<T> PartialEq for Node<T> where T: TerminalValue {
+impl<T> PartialEq for Node<T> where T: TerminalNum {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
 }
 
-impl<T> Eq for Node<T> where T: TerminalValue {}
+impl<T> Eq for Node<T> where T: TerminalNum {}
 
-impl<T> Hash for Node<T> where T: TerminalValue {
+impl<T> Hash for Node<T> where T: TerminalNum {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<T> Node<T> where T: TerminalValue {
+impl<T> Node<T> where T: TerminalNum {
     fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Node<T>]) -> Self {
         let x = NonTerminal {
             id: id,
@@ -104,7 +103,7 @@ pub struct MtMDD<T> {
     cache: HashMap<(Operation, NodeId, NodeId), Node<T>>,
 }
 
-impl<T> MtMDD<T> where T: TerminalValue {
+impl<T> MtMDD<T> where T: TerminalNum {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
