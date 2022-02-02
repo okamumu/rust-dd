@@ -1,16 +1,16 @@
-use std::rc::Rc;
-use std::hash::{Hash, Hasher};
-use core::slice::Iter;
+use std::hash::Hash;
 
 use crate::common::{
     HeaderId,
     NodeId,
     Level,
-    HashMap,
-    HashSet,
     NodeHeader,
     TerminalBin,
+    HashSet,
+    HashMap,
 };
+
+use crate::bdd_nodes::Node;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -18,116 +18,6 @@ enum Operation {
     AND,
     OR,
     XOR,
-}
-
-#[derive(Debug)]
-pub struct Terminal<T> {
-    id: NodeId,
-    value: T
-}
-
-impl<T> Terminal<T> where T: TerminalBin {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    #[inline]
-    fn value(&self) -> T {
-        self.value
-    }
-}
-
-#[derive(Debug)]
-pub struct NonTerminal<T> {
-    id: NodeId,
-    header: NodeHeader,
-    nodes: [Node<T>; 2],
-}
-
-impl<T> NonTerminal<T> {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    #[inline]
-    fn header(&self) -> &NodeHeader {
-        &self.header
-    }
-
-    #[inline]
-    pub fn iter(&self) -> Iter<Node<T>> {
-        self.nodes.iter()
-    }
-
-    #[inline]
-    pub fn level(&self) -> Level {
-        self.header.level()
-    }
-
-    #[inline]
-    pub fn label(&self) -> &str {
-        self.header.label()
-    }
-}
-
-#[derive(Debug,Clone)]
-pub enum Node<T> {
-    NonTerminal(Rc<NonTerminal<T>>),
-    Terminal(Rc<Terminal<T>>),
-}
-
-impl<T> PartialEq for Node<T> where T: TerminalBin {
-    fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
-    }
-}
-
-impl<T> Eq for Node<T> where T: TerminalBin {}
-
-impl<T> Hash for Node<T> where T: TerminalBin {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id().hash(state);
-    }
-}
-
-impl<T> Node<T> where T: TerminalBin {
-    fn new_nonterminal(id: NodeId, header: &NodeHeader, low: &Node<T>, high: &Node<T>) -> Self {
-        let x = NonTerminal {
-            id: id,
-            header: header.clone(),
-            nodes: [low.clone(), high.clone()],
-        };
-        Node::NonTerminal(Rc::new(x))
-    }
-
-    fn new_terminal(id: NodeId, value: T) -> Self {
-        let x = Terminal {
-            id: id,
-            value: value,
-        };
-        Node::Terminal(Rc::new(x))
-    }
-    
-    pub fn id(&self) -> NodeId {
-        match self {
-            Node::NonTerminal(x) => x.id(),
-            Node::Terminal(x) => x.id(),
-        }        
-    }
-
-    pub fn header(&self) -> Option<&NodeHeader> {
-        match self {
-            Node::NonTerminal(x) => Some(x.header()),
-            _ => None
-        }
-    }
-
-    pub fn level(&self) -> Option<Level> {
-        self.header()
-            .and_then(|x| Some(x.level()))
-    }
 }
 
 #[derive(Debug)]
@@ -215,9 +105,9 @@ impl<T> BDD<T> where T: TerminalBin {
                     Node::Terminal(fnode) if fnode.value() == T::low() => self.one(),
                     Node::Terminal(fnode) if fnode.value() == T::high() => self.zero(),
                     Node::NonTerminal(fnode) => {
-                        let low = self.not(&fnode.nodes[0]);
-                        let high = self.not(&fnode.nodes[1]);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.not(&fnode[0]);
+                        let high = self.not(&fnode[1]);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     _ => panic!("error"),
                 };
@@ -238,19 +128,19 @@ impl<T> BDD<T> where T: TerminalBin {
                     (_, Node::Terminal(gnode)) if gnode.value() == T::low() => self.zero(),
                     (_, Node::Terminal(gnode)) if gnode.value() == T::high() => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let low = self.and(&fnode.nodes[0], g);
-                        let high = self.and(&fnode.nodes[1], g);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.and(&fnode[0], g);
+                        let high = self.and(&fnode[1], g);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let low = self.and(f, &gnode.nodes[0]);
-                        let high = self.and(f, &gnode.nodes[1]);
-                        self.create_node(&gnode.header, &low, &high)
+                        let low = self.and(f, &gnode[0]);
+                        let high = self.and(f, &gnode[1]);
+                        self.create_node(gnode.header(), &low, &high)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let low = self.and(&fnode.nodes[0], &gnode.nodes[0]);
-                        let high = self.and(&fnode.nodes[1], &gnode.nodes[1]);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.and(&fnode[0], &gnode[0]);
+                        let high = self.and(&fnode[1], &gnode[1]);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     _ => panic!("error"),
                 };
@@ -271,19 +161,19 @@ impl<T> BDD<T> where T: TerminalBin {
                     (_, Node::Terminal(gnode)) if gnode.value() == T::low() => f.clone(),
                     (_, Node::Terminal(gnode)) if gnode.value() == T::high() => self.one(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let low = self.or(&fnode.nodes[0], g);
-                        let high = self.or(&fnode.nodes[1], g);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.or(&fnode[0], g);
+                        let high = self.or(&fnode[1], g);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let low = self.or(f, &gnode.nodes[0]);
-                        let high = self.or(f, &gnode.nodes[1]);
-                        self.create_node(&gnode.header, &low, &high)
+                        let low = self.or(f, &gnode[0]);
+                        let high = self.or(f, &gnode[1]);
+                        self.create_node(gnode.header(), &low, &high)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let low = self.or(&fnode.nodes[0], &gnode.nodes[0]);
-                        let high = self.or(&fnode.nodes[1], &gnode.nodes[1]);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.or(&fnode[0], &gnode[0]);
+                        let high = self.or(&fnode[1], &gnode[1]);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     _ => panic!("error"),
                 };
@@ -304,19 +194,19 @@ impl<T> BDD<T> where T: TerminalBin {
                     (_, Node::Terminal(gnode)) if gnode.value() == T::low() => f.clone(),
                     (_, Node::Terminal(gnode)) if gnode.value() == T::high() => self.not(f),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let low = self.xor(&fnode.nodes[0], g);
-                        let high = self.xor(&fnode.nodes[1], g);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.xor(&fnode[0], g);
+                        let high = self.xor(&fnode[1], g);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let low = self.xor(f, &gnode.nodes[0]);
-                        let high = self.xor(f, &gnode.nodes[1]);
-                        self.create_node(&gnode.header, &low, &high)
+                        let low = self.xor(f, &gnode[0]);
+                        let high = self.xor(f, &gnode[1]);
+                        self.create_node(gnode.header(), &low, &high)
                     },
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let low = self.xor(&fnode.nodes[0], &gnode.nodes[0]);
-                        let high = self.xor(&fnode.nodes[1], &gnode.nodes[1]);
-                        self.create_node(&fnode.header, &low, &high)
+                        let low = self.xor(&fnode[0], &gnode[0]);
+                        let high = self.xor(&fnode[1], &gnode[1]);
+                        self.create_node(fnode.header(), &low, &high)
                     },
                     _ => panic!("error"),
                 };
@@ -349,9 +239,9 @@ impl<T> BDD<T> where T: TerminalBin {
         }
         match f {
             Node::NonTerminal(fnode) => {
-                let key = (fnode.header.id(), fnode.nodes[0].id(), fnode.nodes[1].id());
+                let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
                 self.utable.insert(key, f.clone());
-                for x in fnode.nodes.iter() {
+                for x in fnode.iter() {
                     self.make_utable_(&x, visited);
                 }
             },
@@ -381,7 +271,7 @@ impl<T> BDD<T> where T: TerminalBin {
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
-                for (i,x) in fnode.nodes.iter().enumerate() {
+                for (i,x) in fnode.iter().enumerate() {
                     self.dot_(io, x, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
@@ -429,7 +319,7 @@ mod tests {
         let x = Node::new_nonterminal(3, &h, &zero, &one);
         println!("{:?}", x);
         if let Node::NonTerminal(x) = &x {
-            println!("{:?}", x.header);
+            println!("{:?}", x.header());
         }
         // println!("{:?}", x.header());
     }
