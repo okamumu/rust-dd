@@ -2,7 +2,7 @@ use dd::mdd::*;
 
 fn bench_mdd1 () {
     let n = 1000;
-    let mut f = MDD::new();
+    let mut f: MDD = MDD::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
@@ -23,7 +23,7 @@ fn bench_mdd1 () {
 
 fn bench_mdd2 () {
     let n = 1000;
-    let mut f = MDD::new();
+    let mut f: MDD = MDD::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];

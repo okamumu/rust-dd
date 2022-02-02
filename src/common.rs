@@ -1,5 +1,5 @@
 use num_traits::{NumOps, Zero, One};
-use std::fmt::Display;
+use std::fmt::{Display, Debug};
 use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
@@ -20,6 +20,7 @@ pub trait TerminalBin:
     + Eq
     + Hash
     + Display
+    + Debug
 {
     fn high() -> Self;
     fn low() -> Self;
@@ -112,18 +113,22 @@ impl NodeHeader {
         Self(Rc::new(data))
     }
 
+    #[inline]
     pub fn id(&self) -> HeaderId {
         self.id
     }
 
+    #[inline]
     pub fn level(&self) -> Level {
         self.level
     }
 
+    #[inline]
     pub fn label(&self) -> &str {
         &self.label
     }
 
+    #[inline]
     pub fn edge_num(&self) -> usize {
         self.edge_num
     }

@@ -21,6 +21,24 @@ enum Operation {
 }
 
 #[derive(Debug)]
+pub struct Terminal<T> {
+    id: NodeId,
+    value: T
+}
+
+impl<T> Terminal<T> where T: TerminalBin {
+    #[inline]
+    fn id(&self) -> NodeId {
+        self.id
+    }
+
+    #[inline]
+    fn value(&self) -> T {
+        self.value
+    }
+}
+
+#[derive(Debug)]
 pub struct NonTerminal<T> {
     id: NodeId,
     header: NodeHeader,
@@ -28,15 +46,30 @@ pub struct NonTerminal<T> {
 }
 
 impl<T> NonTerminal<T> {
-    pub fn node_iter(&self) -> Iter<Node<T>> {
+    #[inline]
+    fn id(&self) -> NodeId {
+        self.id
+    }
+
+    #[inline]
+    fn header(&self) -> &NodeHeader {
+        &self.header
+    }
+
+    #[inline]
+    pub fn iter(&self) -> Iter<Node<T>> {
         self.nodes.iter()
     }
-}
 
-#[derive(Debug)]
-pub struct Terminal<T> {
-    id: NodeId,
-    value: T,
+    #[inline]
+    pub fn level(&self) -> Level {
+        self.header.level()
+    }
+
+    #[inline]
+    pub fn label(&self) -> &str {
+        self.header.label()
+    }
 }
 
 #[derive(Debug,Clone)]
@@ -79,8 +112,8 @@ impl<T> Node<T> where T: TerminalBin {
     
     pub fn id(&self) -> NodeId {
         match self {
-            Node::NonTerminal(x) => x.id,
-            Node::Terminal(x) => x.id,
+            Node::NonTerminal(x) => x.id(),
+            Node::Terminal(x) => x.id(),
         }        
     }
 
@@ -163,8 +196,8 @@ impl<T> MDD<T> where T: TerminalBin {
             Some(x) => x.clone(),
             None => {
                 let node = match f {
-                    Node::Terminal(fnode) if fnode.value == T::low() => self.one(),
-                    Node::Terminal(fnode) if fnode.value == T::high() => self.zero(),
+                    Node::Terminal(fnode) if fnode.value() == T::low() => self.one(),
+                    Node::Terminal(fnode) if fnode.value() == T::high() => self.zero(),
                     Node::NonTerminal(fnode) => {
                         let nodes = fnode.nodes.iter().map(|f| self.not(f)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
@@ -186,19 +219,19 @@ impl<T> MDD<T> where T: TerminalBin {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == T::low() => self.zero(),
-                    (Node::Terminal(fnode), _) if fnode.value == T::high() => g.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == T::low() => self.zero(),
-                    (_, Node::Terminal(gnode)) if gnode.value == T::high() => f.clone(),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
+                    (Node::Terminal(fnode), _) if fnode.value() == T::low() => self.zero(),
+                    (Node::Terminal(fnode), _) if fnode.value() == T::high() => g.clone(),
+                    (_, Node::Terminal(gnode)) if gnode.value() == T::low() => self.zero(),
+                    (_, Node::Terminal(gnode)) if gnode.value() == T::high() => f.clone(),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.and(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.and(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.and(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -219,19 +252,19 @@ impl<T> MDD<T> where T: TerminalBin {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == T::low() => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value == T::high() => self.one(),
-                    (_, Node::Terminal(gnode)) if gnode.value == T::low() => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == T::high() => self.one(),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
+                    (Node::Terminal(fnode), _) if fnode.value() == T::low() => g.clone(),
+                    (Node::Terminal(fnode), _) if fnode.value() == T::high() => self.one(),
+                    (_, Node::Terminal(gnode)) if gnode.value() == T::low() => f.clone(),
+                    (_, Node::Terminal(gnode)) if gnode.value() == T::high() => self.one(),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.or(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.or(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.or(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -249,19 +282,19 @@ impl<T> MDD<T> where T: TerminalBin {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == T::low() => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value == T::high() => self.not(g),
-                    (_, Node::Terminal(gnode)) if gnode.value == T::low() => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value == T::high() => self.not(f),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
+                    (Node::Terminal(fnode), _) if fnode.value() == T::low() => g.clone(),
+                    (Node::Terminal(fnode), _) if fnode.value() == T::high() => self.not(g),
+                    (_, Node::Terminal(gnode)) if gnode.value() == T::low() => f.clone(),
+                    (_, Node::Terminal(gnode)) if gnode.value() == T::high() => self.not(f),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.xor(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.xor(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.xor(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -317,15 +350,15 @@ impl<T> MDD<T> where T: TerminalBin {
         }
         match f {
             Node::Terminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, fnode.value);
+                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label());
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.nodes.iter().enumerate() {
                     self.dot_(io, x, visited);
-                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id, x.id(), i);
+                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
             },

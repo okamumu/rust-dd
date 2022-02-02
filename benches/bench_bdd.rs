@@ -8,14 +8,14 @@ fn clock<F>(s: &str, f: F) where F: FnOnce() {
     println!("{}: time {}", s, end.as_secs_f64());
 }
 
-pub fn table(dd: &BDD, f: &Node) -> Vec<(Vec<usize>,usize)> {
+pub fn table<T>(dd: &BDD<T>, f: &Node<T>) -> Vec<(Vec<usize>,usize)> where T: TerminalBin {
     let mut tab = Vec::new();
     let p = vec![0; dd.size().0];
     table_(dd, f.level().unwrap(), f, &p, &mut tab);
     tab
 }
 
-pub fn table_(dd: &BDD, level: Level, f: &Node, path: &[usize], tab: &mut Vec<(Vec<usize>,usize)>) {
+pub fn table_<T>(dd: &BDD<T>, level: Level, f: &Node<T>, path: &[usize], tab: &mut Vec<(Vec<usize>,usize)>) where T: TerminalBin {
     println!("enter {}", level);
     match f {
         Node::Terminal(_) if f == &dd.zero() => {
@@ -32,7 +32,7 @@ pub fn table_(dd: &BDD, level: Level, f: &Node, path: &[usize], tab: &mut Vec<(V
         },
         Node::NonTerminal(fnode) => {
             println!("match nonterminal");
-            for (i,e) in fnode.node_iter().enumerate() {
+            for (i,e) in fnode.iter().enumerate() {
                 println!("loop {} level {} next node {:?}", i, level, e);
                 let mut p = path.to_vec();
                 match e.level() {
@@ -66,7 +66,7 @@ pub fn table_(dd: &BDD, level: Level, f: &Node, path: &[usize], tab: &mut Vec<(V
 
 fn bench_bdd1 () {
     let n = 1000;
-    let mut f = BDD::new();
+    let mut f: BDD = BDD::new();
     let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
     let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
 
@@ -79,7 +79,7 @@ fn bench_bdd1 () {
 
 fn bench_bdd2 () {
     let n = 1000;
-    let mut f = BDD::new();
+    let mut f: BDD = BDD::new();
     let mut b = f.one();
     {
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
@@ -100,7 +100,7 @@ fn bench_bdd2 () {
 
 fn bench_bdd3 () {
     let n = 3;
-    let mut f = BDD::new();
+    let mut f: BDD = BDD::new();
     let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
     let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
 

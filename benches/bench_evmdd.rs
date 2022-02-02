@@ -1,14 +1,14 @@
 use dd::common::*;
 use dd::ev_plus_mdd::*;
 
-pub fn table<T>(dd: &EVMDD<T>, fv: T, f: &Node<T>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue {
+pub fn table<T,U>(dd: &EVMDD<T,U>, fv: T, f: &Node<T,U>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue, U: TerminalBin {
     let mut tab = Vec::new();
     let p = Vec::new();
     table_(dd, f, &p, &mut tab, fv);
     tab
 }
 
-pub fn table_<T>(dd: &EVMDD<T>, f: &Node<T>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue {
+pub fn table_<T,U>(dd: &EVMDD<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue, U: TerminalBin {
     match f {
         Node::Terminal(_) if f == &dd.infinity() => {
             tab.push((path.to_vec(), None));
