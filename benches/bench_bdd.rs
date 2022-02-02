@@ -1,4 +1,5 @@
 use dd::common::*;
+use dd::bdd_nodes::Node;
 use dd::bdd::*;
 
 fn clock<F>(s: &str, f: F) where F: FnOnce() {
@@ -18,13 +19,13 @@ pub fn table<T>(dd: &BDD<T>, f: &Node<T>) -> Vec<(Vec<usize>,usize)> where T: Te
 pub fn table_<T>(dd: &BDD<T>, level: Level, f: &Node<T>, path: &[usize], tab: &mut Vec<(Vec<usize>,usize)>) where T: TerminalBin {
     println!("enter {}", level);
     match f {
-        Node::Terminal(_) if f == &dd.zero() => {
+        Node::Terminal(fnode) if fnode.value() == T::low() => {
             println!("match terminal 1");
             let p = path.to_vec();
             tab.push((p,0));
             println!("{:?}", tab);
         },
-        Node::Terminal(_) if f == &dd.one() => {
+        Node::Terminal(fnode) if fnode.value() == T::high() => {
             println!("match terminal 2");
             let p = path.to_vec();
             tab.push((p,1));
