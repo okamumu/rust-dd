@@ -9,6 +9,7 @@ use crate::common::{
     Level,
     HashMap,
     HashSet,
+    NodeHeader,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -21,71 +22,28 @@ enum Operation {
 }
 
 #[derive(Debug)]
-pub struct NodeHeaderData {
-    id: HeaderId,
-    level: Level,
-    label: String,
-}
-
-#[derive(Debug,Clone)]
-pub struct NodeHeader(Rc<NodeHeaderData>);
-
-impl Deref for NodeHeader {
-    type Target = Rc<NodeHeaderData>;
-    
-    fn deref(&self) -> &Rc<NodeHeaderData> {
-        &self.0
-    }
-}
-
-impl PartialEq for NodeHeader {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for NodeHeader {}
-
-impl Hash for NodeHeader {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-impl NodeHeader {
-    fn new(id: HeaderId, level: Level, label: &str) -> Self {
-        let data = NodeHeaderData{
-            id: id,
-            level: level,
-            label: label.to_string(),
-        };
-        Self(Rc::new(data))
-    }
-}
-
-#[derive(Debug)]
-pub struct NonTerminalNode {
+pub struct NonTerminal {
     id: NodeId,
     header: NodeHeader,
     nodes: [Node; 2],
 }
 
-impl NonTerminalNode {
+impl NonTerminal {
     pub fn node_iter(&self) -> Iter<Node> {
         self.nodes.iter()
     }
 }
 
 #[derive(Debug)]
-pub struct TerminalNode {
+pub struct Terminal {
     id: NodeId,
     value: bool,
 }
 
 #[derive(Debug,Clone)]
 pub enum Node {
-    NonTerminal(Rc<NonTerminalNode>),
-    Terminal(Rc<TerminalNode>),
+    NonTerminal(Rc<NonTerminal>),
+    Terminal(Rc<Terminal>),
 }
 
 impl PartialEq for Node {
@@ -104,7 +62,7 @@ impl Hash for Node {
 
 impl Node {
     fn new_nonterminal(id: NodeId, header: &NodeHeader, low: &Node, high: &Node) -> Self {
-        let x = NonTerminalNode {
+        let x = NonTerminal {
             id: id,
             header: header.clone(),
             nodes: [low.clone(), high.clone()],
@@ -113,7 +71,7 @@ impl Node {
     }
 
     fn new_terminal(id: NodeId, value: bool) -> Self {
-        let x = TerminalNode {
+        let x = Terminal {
             id: id,
             value: value,
         };
@@ -162,13 +120,13 @@ impl ZDD {
     }
     
     pub fn header(&mut self, level: Level, label: &str) -> NodeHeader {
-        let h = NodeHeader::new(self.num_headers, level, label);
+        let h = NodeHeader::new(self.num_headers, level, label, 2);
         self.num_headers += 1;
         h
     }
     
     pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == 2 {
+        if nodes.len() == h.edge_num() {
             Ok(self.create_node(h, &nodes[0], &nodes[1]))
         } else {
             Err(String::from("Did not match the number of edges in header and arguments."))
@@ -180,7 +138,7 @@ impl ZDD {
             return low.clone()
         }
         
-        let key = (h.id, low.id(), high.id());
+        let key = (h.id(), low.id(), high.id());
         match self.utable.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -231,17 +189,17 @@ impl ZDD {
                     (Node::Terminal(fnode), _) if fnode.value == true => g.clone(),
                     (_, Node::Terminal(gnode)) if gnode.value == false => self.zero(),
                     (_, Node::Terminal(gnode)) if gnode.value == true => f.clone(),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let low = self.intersect(&fnode.nodes[0], g);
                         let high = self.intersect(&fnode.nodes[1], &self.zero());
                         self.create_node(&fnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let low = self.intersect(f, &gnode.nodes[0]);
                         let high = self.intersect(&self.zero(), &gnode.nodes[1]);
                         self.create_node(&gnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let low = self.intersect(&fnode.nodes[0], &gnode.nodes[0]);
                         let high = self.intersect(&fnode.nodes[1], &gnode.nodes[1]);
                         self.create_node(&fnode.header, &low, &high)
@@ -264,17 +222,17 @@ impl ZDD {
                     (Node::Terminal(fnode), _) if fnode.value == true => self.one(),
                     (_, Node::Terminal(gnode)) if gnode.value == false => f.clone(),
                     (_, Node::Terminal(gnode)) if gnode.value == true => self.one(),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let low = self.union(&fnode.nodes[0], g);
                         let high = self.union(&fnode.nodes[1], &self.zero());
                         self.create_node(&fnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let low = self.union(f, &gnode.nodes[0]);
                         let high = self.union(&self.zero(), &gnode.nodes[1]);
                         self.create_node(&gnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let low = self.union(&fnode.nodes[0], &gnode.nodes[0]);
                         let high = self.union(&fnode.nodes[1], &gnode.nodes[1]);
                         self.create_node(&fnode.header, &low, &high)
@@ -297,17 +255,17 @@ impl ZDD {
                     (Node::Terminal(fnode), _) if fnode.value == true => self.not(g),
                     (_, Node::Terminal(gnode)) if gnode.value == false => f.clone(),
                     (_, Node::Terminal(gnode)) if gnode.value == true => self.not(f),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let low = self.setdiff(&fnode.nodes[0], g);
                         let high = self.setdiff(&fnode.nodes[1], &self.zero());
                         self.create_node(&fnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let low = self.setdiff(f, &gnode.nodes[0]);
                         let high = self.setdiff(&self.zero(), &gnode.nodes[1]);
                         self.create_node(&gnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let low = self.setdiff(&fnode.nodes[0], &gnode.nodes[0]);
                         let high = self.setdiff(&fnode.nodes[1], &gnode.nodes[1]);
                         self.create_node(&fnode.header, &low, &high)
@@ -330,17 +288,17 @@ impl ZDD {
                     (Node::Terminal(fnode), _) if fnode.value == true => g.clone(),
                     (_, Node::Terminal(gnode)) if gnode.value == false => self.zero(),
                     (_, Node::Terminal(gnode)) if gnode.value == true => f.clone(),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let low = self.product(&fnode.nodes[0], g);
                         let high = self.product(&fnode.nodes[1], g);
                         self.create_node(&fnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let low = self.product(f, &gnode.nodes[0]);
                         let high = self.product(f, &gnode.nodes[1]);
                         self.create_node(&gnode.header, &low, &high)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let low = self.product(&fnode.nodes[0], &gnode.nodes[0]);
                         let high = self.product(&fnode.nodes[1], &gnode.nodes[1]);
                         self.create_node(&fnode.header, &low, &high)
@@ -371,7 +329,7 @@ impl ZDD {
         }
         match f {
             Node::NonTerminal(fnode) => {
-                let key = (fnode.header.id, fnode.nodes[0].id(), fnode.nodes[1].id());
+                let key = (fnode.header.id(), fnode.nodes[0].id(), fnode.nodes[1].id());
                 self.utable.insert(key, f.clone());
                 for x in fnode.nodes.iter() {
                     self.make_utable_(&x, visited);
@@ -405,7 +363,7 @@ impl ZDD {
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label);
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.nodes.iter().enumerate() {
                     self.dot_(io, x, visited);
@@ -432,9 +390,9 @@ mod tests {
 
     #[test]
     fn new_header() {
-        let h = NodeHeader::new(0, 0, "test");
+        let h = NodeHeader::new(0, 0, "test", 2);
         println!("{:?}", h);
-        println!("{:?}", h.level);
+        println!("{:?}", h.level());
         let x = h.clone();
         println!("{:?}", x);
         println!("{:?}", x == h);
@@ -452,7 +410,7 @@ mod tests {
     fn new_nonterminal() {
         let zero = Node::new_terminal(0, false);
         let one = Node::new_terminal(1, true);
-        let h = NodeHeader::new(0, 0, "x");
+        let h = NodeHeader::new(0, 0, "x", 2);
         let x = Node::new_nonterminal(3, &h, &zero, &one);
         println!("{:?}", x);
         if let Node::NonTerminal(x) = &x {
@@ -464,7 +422,7 @@ mod tests {
     #[test]
     fn new_test1() {
         let mut dd = ZDD::new();
-        let h = NodeHeader::new(0, 0, "x");
+        let h = NodeHeader::new(0, 0, "x", 2);
         let x = dd.create_node(&h, &dd.zero(), &dd.one());
         println!("{:?}", x);
         let y = dd.create_node(&h, &dd.zero(), &dd.one());
@@ -475,8 +433,8 @@ mod tests {
     #[test]
     fn new_test2() {
         let mut dd = ZDD::new();
-        let h1 = NodeHeader::new(0, 0, "x");
-        let h2 = NodeHeader::new(1, 1, "y");
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.one(), &dd.one());
         let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.intersect(&x, &y);
@@ -489,8 +447,8 @@ mod tests {
     #[test]
     fn new_test3() {
         let mut dd = ZDD::new();
-        let h1 = NodeHeader::new(0, 0, "x");
-        let h2 = NodeHeader::new(1, 1, "y");
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.one(), &dd.one());
         let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.intersect(&x, &y);
@@ -508,8 +466,8 @@ mod tests {
     #[test]
     fn new_test4() {
         let mut dd = ZDD::new();
-        let h1 = NodeHeader::new(0, 0, "x");
-        let h2 = NodeHeader::new(1, 1, "y");
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.zero(), &dd.one());
         let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.union(&x, &y);

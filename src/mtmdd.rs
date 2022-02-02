@@ -10,6 +10,7 @@ use crate::common::{
     HashMap,
     HashSet,
     TerminalValue,
+    NodeHeader,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -23,73 +24,28 @@ enum Operation {
 }
 
 #[derive(Debug)]
-pub struct NodeHeaderData {
-    id: HeaderId,
-    level: Level,
-    label: String,
-    edge_num: usize,
-}
-
-#[derive(Debug,Clone)]
-pub struct NodeHeader(Rc<NodeHeaderData>);
-
-impl Deref for NodeHeader {
-    type Target = Rc<NodeHeaderData>;
-    
-    fn deref(&self) -> &Rc<NodeHeaderData> {
-        &self.0
-    }
-}
-
-impl PartialEq for NodeHeader {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for NodeHeader {}
-
-impl Hash for NodeHeader {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-impl NodeHeader {
-    fn new(id: HeaderId, level: Level, label: &str, edge_num: usize) -> Self {
-        let data = NodeHeaderData{
-            id: id,
-            level: level,
-            label: label.to_string(),
-            edge_num: edge_num,
-        };
-        Self(Rc::new(data))
-    }
-}
-
-#[derive(Debug)]
-pub struct NonTerminalNode<T> {
+pub struct NonTerminal<T> {
     id: NodeId,
     header: NodeHeader,
     nodes: Box<[Node<T>]>,
 }
 
-impl<T> NonTerminalNode<T> where T: TerminalValue {
+impl<T> NonTerminal<T> where T: TerminalValue {
     pub fn node_iter(&self) -> Iter<Node<T>> {
         self.nodes.iter()
     }
 }
 
 #[derive(Debug)]
-pub struct TerminalNode<T> {
+pub struct Terminal<T> {
     id: NodeId,
     value: T,
 }
 
 #[derive(Debug,Clone)]
 pub enum Node<T> {
-    NonTerminal(Rc<NonTerminalNode<T>>),
-    Terminal(Rc<TerminalNode<T>>),
+    NonTerminal(Rc<NonTerminal<T>>),
+    Terminal(Rc<Terminal<T>>),
 }
 
 impl<T> PartialEq for Node<T> where T: TerminalValue {
@@ -108,7 +64,7 @@ impl<T> Hash for Node<T> where T: TerminalValue {
 
 impl<T> Node<T> where T: TerminalValue {
     fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Node<T>]) -> Self {
-        let x = NonTerminalNode {
+        let x = NonTerminal {
             id: id,
             header: header.clone(),
             nodes: nodes.iter().map(|x| x.clone()).collect::<Vec<_>>().into_boxed_slice(),
@@ -117,7 +73,7 @@ impl<T> Node<T> where T: TerminalValue {
     }
 
     fn new_terminal(id: NodeId, value: T) -> Self {
-        let x = TerminalNode {
+        let x = Terminal {
             id: id,
             value: value,
         };
@@ -182,7 +138,7 @@ impl<T> MtMDD<T> where T: TerminalValue {
     }
     
     pub fn node(&mut self, h: &NodeHeader, nodes: &[Node<T>]) -> Result<Node<T>,String> {
-        if h.edge_num == nodes.len() {
+        if h.edge_num() == nodes.len() {
             Ok(self.create_node(h, nodes))
         } else {
             Err(String::from("Did not match the number of edges in header and arguments."))
@@ -194,7 +150,7 @@ impl<T> MtMDD<T> where T: TerminalValue {
             return nodes[0].clone()
         }
         
-        let key = (h.id, nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
+        let key = (h.id(), nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
         match self.utable.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -223,15 +179,15 @@ impl<T> MtMDD<T> where T: TerminalValue {
                         let nodes = fnode.nodes.iter().map(|f| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -258,15 +214,15 @@ impl<T> MtMDD<T> where T: TerminalValue {
                         let nodes = fnode.nodes.iter().map(|f| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.sub(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -297,15 +253,15 @@ impl<T> MtMDD<T> where T: TerminalValue {
                         let nodes = fnode.nodes.iter().map(|f| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -332,15 +288,15 @@ impl<T> MtMDD<T> where T: TerminalValue {
                         let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -367,15 +323,15 @@ impl<T> MtMDD<T> where T: TerminalValue {
                         let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -402,15 +358,15 @@ impl<T> MtMDD<T> where T: TerminalValue {
                         let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
                         let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
                         let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
                         let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&fnode.header, &nodes)
                     },
@@ -444,7 +400,7 @@ impl<T> MtMDD<T> where T: TerminalValue {
                 self.vtable.insert(fnode.value, f.clone());
             },
             Node::NonTerminal(fnode) => {
-                let key = (fnode.header.id, fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
+                let key = (fnode.header.id(), fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
                 self.utable.insert(key, f.clone());
                 for x in fnode.nodes.iter() {
                     self.make_utable_(&x, visited);
@@ -473,7 +429,7 @@ impl<T> MtMDD<T> where T: TerminalValue {
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label);
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.nodes.iter().enumerate() {
                     self.dot_(io, x, visited);
@@ -501,7 +457,7 @@ mod tests {
     fn new_header() {
         let h = NodeHeader::new(0, 0, "test", 2);
         println!("{:?}", h);
-        println!("{:?}", h.level);
+        println!("{:?}", h.level());
         let x = h.clone();
         println!("{:?}", x);
         println!("{:?}", x == h);
