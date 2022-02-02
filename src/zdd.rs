@@ -1,13 +1,15 @@
 use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
+use core::slice::Iter;
 
-// use std::collections::{HashMap, HashSet};
-use hashbrown::{HashMap, HashSet};
-
-type HeaderId = usize;
-type NodeId = usize;
-type Level = usize;
+use crate::common::{
+    HeaderId,
+    NodeId,
+    Level,
+    HashMap,
+    HashSet,
+};
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -66,6 +68,12 @@ pub struct NonTerminalNode {
     id: NodeId,
     header: NodeHeader,
     nodes: [Node; 2],
+}
+
+impl NonTerminalNode {
+    pub fn node_iter(&self) -> Iter<Node> {
+        self.nodes.iter()
+    }
 }
 
 #[derive(Debug)]
@@ -129,8 +137,8 @@ impl Node {
 
 #[derive(Debug)]
 pub struct ZDD {
-    num_headers: usize,
-    num_nodes: usize,
+    num_headers: HeaderId,
+    num_nodes: NodeId,
     zero: Node,
     one: Node,
     utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
@@ -149,7 +157,7 @@ impl ZDD {
         }
     }
 
-    pub fn size(&self) -> (usize, usize, usize) {
+    pub fn size(&self) -> (HeaderId, NodeId, usize) {
         (self.num_headers, self.num_nodes, self.utable.len())
     }
     

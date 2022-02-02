@@ -1,13 +1,15 @@
 use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
+use core::slice::Iter;
 
-// use std::collections::{HashMap, HashSet};
-use hashbrown::{HashMap, HashSet};
-
-type HeaderId = usize;
-type NodeId = usize;
-type Level = usize;
+use crate::common::{
+    HeaderId,
+    NodeId,
+    Level,
+    HashMap,
+    HashSet,
+};
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -51,7 +53,7 @@ impl Hash for NodeHeader {
 
 impl NodeHeader {
     fn new(id: HeaderId, level: Level, label: &str) -> Self {
-        let data = NodeHeaderData{
+        let data = NodeHeaderData {
             id: id,
             level: level,
             label: label.to_string(),
@@ -65,6 +67,16 @@ pub struct NonTerminalNode {
     id: NodeId,
     header: NodeHeader,
     nodes: [Node; 2],
+}
+
+impl NonTerminalNode {
+    pub fn node_iter(&self) -> Iter<Node> {
+        self.nodes.iter()
+    }
+
+    // pub fn header(&self) -> &NodeHeader {
+    //     &self.header
+    // }
 }
 
 #[derive(Debug)]
@@ -118,9 +130,16 @@ impl Node {
         }        
     }
 
-    pub fn header(&self) -> Option<&NodeHeader> {
+    // pub fn header(&self) -> Option<&NodeHeader> {
+    //     match self {
+    //         Node::NonTerminal(x) => Some(&x.header),
+    //         _ => None,
+    //     }
+    // }
+
+    pub fn level(&self) -> Option<Level> {
         match self {
-            Node::NonTerminal(x) => Some(&x.header),
+            Node::NonTerminal(x) => Some(x.header.level),
             _ => None,
         }
     }
@@ -128,8 +147,8 @@ impl Node {
 
 #[derive(Debug)]
 pub struct BDD {
-    num_headers: usize,
-    num_nodes: usize,
+    num_headers: HeaderId,
+    num_nodes: NodeId,
     zero: Node,
     one: Node,
     utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
@@ -148,7 +167,7 @@ impl BDD {
         }
     }
 
-    pub fn size(&self) -> (usize, usize, usize) {
+    pub fn size(&self) -> (HeaderId, NodeId, usize) {
         (self.num_headers, self.num_nodes, self.utable.len())
     }
     
@@ -421,7 +440,7 @@ mod tests {
         if let Node::NonTerminal(x) = &x {
             println!("{:?}", x.header);
         }
-        println!("{:?}", x.header());
+        // println!("{:?}", x.header());
     }
 
     #[test]
@@ -432,7 +451,7 @@ mod tests {
         println!("{:?}", x);
         let y = dd.create_node(&h, &dd.zero(), &dd.one());
         println!("{:?}", y);
-        println!("{:?}", Rc::strong_count(y.header().unwrap()));
+        // println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
 
     #[test]
@@ -446,7 +465,7 @@ mod tests {
         println!("{:?}", x);
         println!("{:?}", y);
         println!("{:?}", z);
-        println!("{:?}", Rc::strong_count(y.header().unwrap()));
+        // println!("{:?}", Rc::strong_count(y.header().unwrap()));
     }
     
     #[test]

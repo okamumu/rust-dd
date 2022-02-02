@@ -1,15 +1,16 @@
 use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, Sub, Mul, Div};
-use std::fmt::Display;
+use core::slice::Iter;
 
-// use std::collections::{HashMap, HashSet};
-use hashbrown::{HashMap, HashSet};
-
-type HeaderId = usize;
-type NodeId = usize;
-type Level = usize;
+use crate::common::{
+    HeaderId,
+    NodeId,
+    Level,
+    HashMap,
+    HashSet,
+    TerminalValue,
+};
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -17,6 +18,8 @@ enum Operation {
     SUB,
     MUL,
     DIV,
+    MIN,
+    MAX,
 }
 
 #[derive(Debug)]
@@ -71,6 +74,12 @@ pub struct NonTerminalNode<T> {
     nodes: Box<[Node<T>]>,
 }
 
+impl<T> NonTerminalNode<T> where T: TerminalValue {
+    pub fn node_iter(&self) -> Iter<Node<T>> {
+        self.nodes.iter()
+    }
+}
+
 #[derive(Debug)]
 pub struct TerminalNode<T> {
     id: NodeId,
@@ -83,21 +92,21 @@ pub enum Node<T> {
     Terminal(Rc<TerminalNode<T>>),
 }
 
-impl<T> PartialEq for Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
+impl<T> PartialEq for Node<T> where T: TerminalValue {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
 }
 
-impl<T> Eq for Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {}
+impl<T> Eq for Node<T> where T: TerminalValue {}
 
-impl<T> Hash for Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
+impl<T> Hash for Node<T> where T: TerminalValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<T> Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
+impl<T> Node<T> where T: TerminalValue {
     fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Node<T>]) -> Self {
         let x = NonTerminalNode {
             id: id,
@@ -132,35 +141,35 @@ impl<T> Node<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + 
 
 #[derive(Debug)]
 pub struct MtMDD<T> {
-    num_headers: usize,
-    num_nodes: usize,
-    values: HashMap<T,Node<T>>,
+    num_headers: HeaderId,
+    num_nodes: NodeId,
+    vtable: HashMap<T,Node<T>>,
     utable: HashMap<(HeaderId, Box<[NodeId]>), Node<T>>,
     cache: HashMap<(Operation, NodeId, NodeId), Node<T>>,
 }
 
-impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T> + Display {
+impl<T> MtMDD<T> where T: TerminalValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
             num_nodes: 0,
-            values: HashMap::new(),
+            vtable: HashMap::new(),
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
     }
 
-    pub fn size(&self) -> (usize, usize, usize, usize) {
-        (self.values.len(), self.num_headers, self.num_nodes, self.utable.len())
+    pub fn size(&self) -> (usize, HeaderId, NodeId, usize) {
+        (self.vtable.len(), self.num_headers, self.num_nodes, self.utable.len())
     }
    
     pub fn value(&mut self, value: T) -> Node<T> {
-        match self.values.get(&value) {
+        match self.vtable.get(&value) {
             Some(x) => x.clone(),
             None => {
                 let node = Node::new_terminal(self.num_nodes, value);
                 self.num_nodes += 1;
-                self.values.insert(value, node.clone());
+                self.vtable.insert(value, node.clone());
                 node
             }
         }
@@ -204,6 +213,8 @@ impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> +
             None => {
                 let node = match (f, g) {
                     (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value + gnode.value),
+                    (Node::Terminal(fnode), Node::NonTerminal(_gnode)) if fnode.value == T::zero() => g.clone(),
+                    (Node::NonTerminal(_fnode), Node::Terminal(gnode)) if gnode.value == T::zero() => f.clone(),
                     (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
                         let nodes = gnode.nodes.iter().map(|g| self.add(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
@@ -274,6 +285,10 @@ impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> +
             None => {
                 let node = match (f, g) {
                     (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value * gnode.value),
+                    (Node::Terminal(fnode), Node::NonTerminal(_gnode)) if fnode.value == T::zero() => self.value(T::zero()),
+                    (Node::NonTerminal(_fnode), Node::Terminal(gnode)) if gnode.value == T::zero() => self.value(T::zero()),
+                    (Node::Terminal(fnode), Node::NonTerminal(_gnode)) if fnode.value == T::one() => g.clone(),
+                    (Node::NonTerminal(_fnode), Node::Terminal(gnode)) if gnode.value == T::one() => f.clone(),
                     (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
                         let nodes = gnode.nodes.iter().map(|g| self.mul(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
@@ -308,7 +323,7 @@ impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> +
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value * gnode.value),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(fnode.value / gnode.value),
                     (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
                         let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
                         self.create_node(&gnode.header, &nodes)
@@ -337,11 +352,82 @@ impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> +
         }
     }
     
+    pub fn min(&mut self, f: &Node<T>, g: &Node<T>) -> Node<T> {
+        let key = (Operation::MIN, f.id(), g.id());
+        match self.cache.get(&key) {
+            Some(x) => x.clone(),
+            None => {
+                let node = match (f, g) {
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(std::cmp::min(fnode.value, gnode.value)),
+                    (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
+                        let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(_gnode)) => {
+                        let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                        let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                        let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    _ => panic!("error"),
+                };
+                self.cache.insert(key, node.clone());
+                node
+            }
+        }
+    }
+
+    pub fn max(&mut self, f: &Node<T>, g: &Node<T>) -> Node<T> {
+        let key = (Operation::MAX, f.id(), g.id());
+        match self.cache.get(&key) {
+            Some(x) => x.clone(),
+            None => {
+                let node = match (f, g) {
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) => self.value(std::cmp::max(fnode.value, gnode.value)),
+                    (Node::Terminal(_fnode), Node::NonTerminal(gnode)) => {
+                        let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::Terminal(_gnode)) => {
+                        let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level > gnode.header.level => {
+                        let nodes = fnode.nodes.iter().map(|f| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level < gnode.header.level => {
+                        let nodes = gnode.nodes.iter().map(|g| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&gnode.header, &nodes)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level == gnode.header.level => {
+                        let nodes = fnode.nodes.iter().zip(gnode.nodes.iter()).map(|(f,g)| self.div(f, g)).collect::<Vec<_>>();
+                        self.create_node(&fnode.header, &nodes)
+                    },
+                    _ => panic!("error"),
+                };
+                self.cache.insert(key, node.clone());
+                node
+            }
+        }
+    }
+
     pub fn clear(&mut self) {
         self.cache.clear();
     }
     
     pub fn rebuild(&mut self, fs: &[Node<T>]) {
+        self.vtable.clear();
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
@@ -354,6 +440,9 @@ impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> +
             return
         }
         match f {
+            Node::Terminal(fnode) => {
+                self.vtable.insert(fnode.value, f.clone());
+            },
             Node::NonTerminal(fnode) => {
                 let key = (fnode.header.id, fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
                 self.utable.insert(key, f.clone());
@@ -361,7 +450,6 @@ impl<T> MtMDD<T> where T: Copy + Clone + PartialEq + Eq + Hash + Add<Output=T> +
                     self.make_utable_(&x, visited);
                 }
             },
-            _ => (),
         };
         visited.insert(f.clone());
     }
