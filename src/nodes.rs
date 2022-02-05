@@ -262,12 +262,12 @@ impl<N> NonTerminal for NonTerminalMDD<N> {
 }
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
-pub struct Edge<V,N> {
+pub struct EvEdge<V,N> {
     value: V,
     node: N,
 }
 
-impl<V,N> Edge<V,N> where V: EdgeValue {
+impl<V,N> EvEdge<V,N> where V: EdgeValue {
     #[inline]
     pub fn new(value: V, node: N) -> Self {
         Self {

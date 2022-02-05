@@ -26,6 +26,8 @@ enum Operation {
     XOR,
 }
 
+pub type Node<V> = BDDNode<V>;
+
 #[derive(Debug,Clone)]
 pub enum BDDNode<V> {
     NonTerminal(Rc<NonTerminalBDD<BDDNode<V>>>),
@@ -78,8 +80,6 @@ impl<V> BDDNode<V> where V: TerminalBinaryValue {
         }
     }
 }
-
-type Node<V> = BDDNode<V>;
 
 #[derive(Debug)]
 pub struct BDD<V=u8> {

@@ -17,7 +17,7 @@ use crate::nodes::{
     NonTerminal,
     TerminalBinary,
     NonTerminalMDD,
-    Edge,
+    EvEdge,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -30,13 +30,14 @@ enum Operation {
     MAX,
 }
 
+pub type Node<E,V> = EVMDDNode<E,V>;
+pub type Edge<E,V> = EvEdge<E,EVMDDNode<E,V>>;
+
 #[derive(Debug,Clone)]
 pub enum EVMDDNode<E,V> {
-    NonTerminal(Rc<NonTerminalMDD<Edge<E,EVMDDNode<E,V>>>>),
+    NonTerminal(Rc<NonTerminalMDD<EvEdge<E,EVMDDNode<E,V>>>>),
     Terminal(Rc<TerminalBinary<V>>),
 }
-
-type EvEdge<E,V> = Edge<E,EVMDDNode<E,V>>;
 
 impl<E,V> PartialEq for EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
@@ -53,7 +54,7 @@ impl<E,V> Hash for EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
 }
 
 impl<E,V> EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
-    fn new_nonterminal(id: NodeId, header: &NodeHeader, edges: &[EvEdge<E,V>]) -> Self {
+    fn new_nonterminal(id: NodeId, header: &NodeHeader, edges: &[Edge<E,V>]) -> Self {
         let x = NonTerminalMDD::new(
             id,
             header.clone(),
@@ -69,20 +70,25 @@ impl<E,V> EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
     
     pub fn id(&self) -> NodeId {
         match self {
-            EVMDDNode::NonTerminal(x) => x.id(),
-            EVMDDNode::Terminal(x) => x.id(),
+            Self::NonTerminal(x) => x.id(),
+            Self::Terminal(x) => x.id(),
         }        
     }
 
     pub fn header(&self) -> Option<&NodeHeader> {
         match self {
-            EVMDDNode::NonTerminal(x) => Some(x.header()),
-            _ => None,
+            Self::NonTerminal(x) => Some(x.header()),
+            _ => None
+        }
+    }
+
+    pub fn level(&self) -> Option<Level> {
+        match self {
+            Self::NonTerminal(x) => Some(x.level()),
+            _ => None
         }
     }
 }
-
-type Node<E,V> = EVMDDNode<E,V>;
 
 #[derive(Debug)]
 pub struct EVMDD<E = i64, V = u8> where E: EdgeValue, V: TerminalBinaryValue {
@@ -91,7 +97,7 @@ pub struct EVMDD<E = i64, V = u8> where E: EdgeValue, V: TerminalBinaryValue {
     omega: Node<E,V>,
     infinity: Node<E,V>,
     utable: HashMap<(HeaderId, Box<[(E,NodeId)]>), Node<E,V>>,
-    cache: HashMap<(Operation, NodeId, NodeId, E), EvEdge<E,V>>,
+    cache: HashMap<(Operation, NodeId, NodeId, E), Edge<E,V>>,
 }
 
 impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
@@ -116,7 +122,7 @@ impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, edges: &[EvEdge<E,V>]) -> Result<Node<E,V>,String> {
+    pub fn node(&mut self, h: &NodeHeader, edges: &[Edge<E,V>]) -> Result<Node<E,V>,String> {
         if h.edge_num() == edges.len() {
             Ok(self.create_node(h, edges))
         } else {
@@ -124,7 +130,7 @@ impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
         }
     }
 
-    fn create_node(&mut self, h: &NodeHeader, edges: &[EvEdge<E,V>]) -> Node<E,V> {
+    fn create_node(&mut self, h: &NodeHeader, edges: &[Edge<E,V>]) -> Node<E,V> {
         if edges.iter().all(|x| &edges[0] == x) {
             return edges[0].node().clone()
         }
@@ -149,7 +155,7 @@ impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
         self.infinity.clone()
     }
 
-    pub fn min(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> EvEdge<E,V> {
+    pub fn min(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> Edge<E,V> {
         let mu = std::cmp::min(fv, gv);
         let key = (Operation::MIN, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {
@@ -188,7 +194,7 @@ impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
         }
     }
     
-    pub fn max(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> EvEdge<E,V> {
+    pub fn max(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> Edge<E,V> {
         let mu = std::cmp::min(fv, gv);
         let key = (Operation::MAX, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {
@@ -241,7 +247,7 @@ impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
         }
     }
 
-    pub fn add(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> EvEdge<E,V> {
+    pub fn add(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> Edge<E,V> {
         let mu = std::cmp::min(fv, gv);
         let key = (Operation::ADD, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {

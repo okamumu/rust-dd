@@ -28,6 +28,8 @@ enum Operation {
     MAX,
 }
 
+pub type Node<V> = MtMDDNode<V>;
+
 #[derive(Debug,Clone)]
 pub enum MtMDDNode<V> {
     NonTerminal(Rc<NonTerminalMDD<MtMDDNode<V>>>),
@@ -84,8 +86,6 @@ impl<V> MtMDDNode<V> where V: TerminalNumberValue {
         }
     }
 }
-
-type Node<V> = MtMDDNode<V>;
 
 #[derive(Debug)]
 pub struct MtMDD<V> {

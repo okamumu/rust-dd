@@ -28,7 +28,7 @@ enum Operation {
     PRODUCT,
 }
 
-type Node<V> = BDDNode<V>;
+pub type Node<V> = BDDNode<V>;
 
 #[derive(Debug)]
 pub struct ZDD<V=u8> {

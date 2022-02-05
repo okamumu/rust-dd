@@ -1,6 +1,9 @@
 use dd::common::*;
-use dd::bdd_nodes::Node;
-use dd::bdd::*;
+use dd::nodes::*;
+use dd::bdd::{
+    BDD,
+    Node,
+};
 
 fn clock<F>(s: &str, f: F) where F: FnOnce() {
     let start = std::time::Instant::now();
@@ -9,14 +12,14 @@ fn clock<F>(s: &str, f: F) where F: FnOnce() {
     println!("{}: time {}", s, end.as_secs_f64());
 }
 
-pub fn table<T>(dd: &BDD<T>, f: &Node<T>) -> Vec<(Vec<usize>,usize)> where T: TerminalBin {
+pub fn table<T>(dd: &BDD<T>, f: &Node<T>) -> Vec<(Vec<usize>,usize)> where T: TerminalBinaryValue {
     let mut tab = Vec::new();
     let p = vec![0; dd.size().0];
     table_(dd, f.level().unwrap(), f, &p, &mut tab);
     tab
 }
 
-pub fn table_<T>(dd: &BDD<T>, level: Level, f: &Node<T>, path: &[usize], tab: &mut Vec<(Vec<usize>,usize)>) where T: TerminalBin {
+pub fn table_<T>(dd: &BDD<T>, level: Level, f: &Node<T>, path: &[usize], tab: &mut Vec<(Vec<usize>,usize)>) where T: TerminalBinaryValue {
     println!("enter {}", level);
     match f {
         Node::Terminal(fnode) if fnode.value() == T::low() => {

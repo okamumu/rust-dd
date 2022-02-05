@@ -1,14 +1,18 @@
 use dd::common::*;
-use dd::ev_plus_mdd::*;
+use dd::nodes::*;
+use dd::ev_plus_mdd::{
+    EVMDD,
+    Node,
+};
 
-pub fn table<T,U>(dd: &EVMDD<T,U>, fv: T, f: &Node<T,U>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue, U: TerminalBin {
+pub fn table<T,U>(dd: &EVMDD<T,U>, fv: T, f: &Node<T,U>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue, U: TerminalBinaryValue {
     let mut tab = Vec::new();
     let p = Vec::new();
     table_(dd, f, &p, &mut tab, fv);
     tab
 }
 
-pub fn table_<T,U>(dd: &EVMDD<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue, U: TerminalBin {
+pub fn table_<T,U>(dd: &EVMDD<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue, U: TerminalBinaryValue {
     match f {
         Node::Terminal(_) if f == &dd.infinity() => {
             tab.push((path.to_vec(), None));
@@ -17,7 +21,7 @@ pub fn table_<T,U>(dd: &EVMDD<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec
             tab.push((path.to_vec(), Some(s)));
         },
         Node::NonTerminal(fnode) => {
-            for (i,e) in fnode.edge_iter().enumerate() {
+            for (i,e) in fnode.iter().enumerate() {
                 let mut p = path.to_vec();
                 p.push(i);
                 table_(dd, &e.node(), &p, tab, s + e.value());

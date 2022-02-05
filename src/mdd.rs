@@ -26,6 +26,8 @@ enum Operation {
     XOR,
 }
 
+pub type Node<V> = MDDNode<V>;
+
 #[derive(Debug,Clone)]
 pub enum MDDNode<V> {
     NonTerminal(Rc<NonTerminalMDD<MDDNode<V>>>),
@@ -82,8 +84,6 @@ impl<V> MDDNode<V> where V: TerminalBinaryValue {
         }
     }
 }
-
-type Node<V> = MDDNode<V>;
 
 #[derive(Debug)]
 pub struct MDD<V = u8> {
