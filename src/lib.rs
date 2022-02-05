@@ -1,5 +1,5 @@
 pub mod common;
-pub mod bdd_nodes;
+pub mod nodes;
 
 pub mod bdd;
 pub mod zdd;

@@ -1,6 +1,5 @@
 use std::rc::Rc;
 use std::hash::{Hash, Hasher};
-use core::slice::Iter;
 
 use crate::common::{
     HeaderId,
@@ -9,8 +8,16 @@ use crate::common::{
     HashMap,
     HashSet,
     EdgeValue,
+    TerminalBinaryValue,
+};
+
+use crate::nodes::{
     NodeHeader,
-    TerminalBin,
+    Terminal,
+    NonTerminal,
+    TerminalBinary,
+    NonTerminalMDD,
+    Edge,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -23,118 +30,77 @@ enum Operation {
     MAX,
 }
 
-#[derive(Debug,Clone,PartialEq,Eq,Hash)]
-pub struct Edge<T,U> where T: EdgeValue, U: TerminalBin {
-    value: T,
-    node: Node<T,U>,
-}
-
-impl<T,U> Edge<T,U> where T: EdgeValue, U: TerminalBin {
-    pub fn new(value: T, node: Node<T,U>) -> Self {
-        Self {
-            value: value,
-            node: node,
-        }
-    }
-
-    pub fn value(&self) -> T {
-        self.value
-    }
-
-    pub fn node(&self) -> Node<T,U> {
-        self.node.clone()
-    }
-}
-
-#[derive(Debug)]
-pub struct NonTerminal<T,U> where T: EdgeValue, U: TerminalBin {
-    id: NodeId,
-    header: NodeHeader,
-    edges: Box<[Edge<T,U>]>,
-}
-
-impl<T,U> NonTerminal<T,U> where T: EdgeValue, U: TerminalBin {
-    pub fn edge_iter(&self) -> Iter<Edge<T,U>> {
-        self.edges.iter()
-    }
-}
-
-#[derive(Debug)]
-pub struct Terminal<U> {
-    id: NodeId,
-    value: U,
-}
-
 #[derive(Debug,Clone)]
-pub enum Node<T,U> where T: EdgeValue, U: TerminalBin {
-    NonTerminal(Rc<NonTerminal<T,U>>),
-    Terminal(Rc<Terminal<U>>),
+pub enum EVMDDNode<E,V> {
+    NonTerminal(Rc<NonTerminalMDD<Edge<E,EVMDDNode<E,V>>>>),
+    Terminal(Rc<TerminalBinary<V>>),
 }
 
-impl<T,U> PartialEq for Node<T,U> where T: EdgeValue, U: TerminalBin {
+type EvEdge<E,V> = Edge<E,EVMDDNode<E,V>>;
+
+impl<E,V> PartialEq for EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
 }
 
-impl<T,U> Eq for Node<T,U> where T: EdgeValue, U: TerminalBin {}
+impl<E,V> Eq for EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {}
 
-impl<T,U> Hash for Node<T,U> where T: EdgeValue, U: TerminalBin {
+impl<E,V> Hash for EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<T,U> Node<T,U> where T: EdgeValue, U: TerminalBin {
-    fn new_nonterminal(id: NodeId, header: &NodeHeader, edges: &[Edge<T,U>]) -> Self {
-        let x = NonTerminal {
-            id: id,
-            header: header.clone(),
-            edges: edges.iter().map(|x| x.clone()).collect::<Vec<_>>().into_boxed_slice(),
-        };
-        Node::NonTerminal(Rc::new(x))
+impl<E,V> EVMDDNode<E,V> where E: EdgeValue, V: TerminalBinaryValue {
+    fn new_nonterminal(id: NodeId, header: &NodeHeader, edges: &[EvEdge<E,V>]) -> Self {
+        let x = NonTerminalMDD::new(
+            id,
+            header.clone(),
+            edges.iter().map(|x| x.clone()).collect::<Vec<_>>().into_boxed_slice(),
+        );
+        EVMDDNode::NonTerminal(Rc::new(x))
     }
 
-    fn new_terminal(id: NodeId, value: U) -> Self {
-        let x = Terminal {
-            id: id,
-            value: value,
-        };
-        Node::Terminal(Rc::new(x))
+    fn new_terminal(id: NodeId, value: V) -> Self {
+        let x = TerminalBinary::new(id, value);
+        EVMDDNode::Terminal(Rc::new(x))
     }
     
     pub fn id(&self) -> NodeId {
         match self {
-            Node::NonTerminal(x) => x.id,
-            Node::Terminal(x) => x.id,
+            EVMDDNode::NonTerminal(x) => x.id(),
+            EVMDDNode::Terminal(x) => x.id(),
         }        
     }
 
     pub fn header(&self) -> Option<&NodeHeader> {
         match self {
-            Node::NonTerminal(x) => Some(&x.header),
+            EVMDDNode::NonTerminal(x) => Some(x.header()),
             _ => None,
         }
     }
 }
 
+type Node<E,V> = EVMDDNode<E,V>;
+
 #[derive(Debug)]
-pub struct EVMDD<T = i64, U = u8> where T: EdgeValue, U: TerminalBin {
+pub struct EVMDD<E = i64, V = u8> where E: EdgeValue, V: TerminalBinaryValue {
     num_headers: HeaderId,
     num_nodes: NodeId,
-    omega: Node<T,U>,
-    infinity: Node<T,U>,
-    utable: HashMap<(HeaderId, Box<[(T,NodeId)]>), Node<T,U>>,
-    cache: HashMap<(Operation, NodeId, NodeId, T), Edge<T,U>>,
+    omega: Node<E,V>,
+    infinity: Node<E,V>,
+    utable: HashMap<(HeaderId, Box<[(E,NodeId)]>), Node<E,V>>,
+    cache: HashMap<(Operation, NodeId, NodeId, E), EvEdge<E,V>>,
 }
 
-impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
+impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
             num_nodes: 2,
-            infinity: Node::new_terminal(0, U::low()),
-            omega: Node::new_terminal(1, U::high()),
+            infinity: Node::new_terminal(0, V::low()),
+            omega: Node::new_terminal(1, V::high()),
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
@@ -150,7 +116,7 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, edges: &[Edge<T,U>]) -> Result<Node<T,U>,String> {
+    pub fn node(&mut self, h: &NodeHeader, edges: &[EvEdge<E,V>]) -> Result<Node<E,V>,String> {
         if h.edge_num() == edges.len() {
             Ok(self.create_node(h, edges))
         } else {
@@ -158,12 +124,12 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
         }
     }
 
-    fn create_node(&mut self, h: &NodeHeader, edges: &[Edge<T,U>]) -> Node<T,U> {
+    fn create_node(&mut self, h: &NodeHeader, edges: &[EvEdge<E,V>]) -> Node<E,V> {
         if edges.iter().all(|x| &edges[0] == x) {
-            return edges[0].node.clone()
+            return edges[0].node().clone()
         }
         
-        let key = (h.id(), edges.iter().map(|x| (x.value, x.node.id())).collect::<Vec<_>>().into_boxed_slice());
+        let key = (h.id(), edges.iter().map(|x| (x.value(), x.node().id())).collect::<Vec<_>>().into_boxed_slice());
         match self.utable.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -175,44 +141,44 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
         }
     }
     
-    pub fn omega(&self) -> Node<T,U> {
+    pub fn omega(&self) -> Node<E,V> {
         self.omega.clone()
     }
     
-    pub fn infinity(&self) -> Node<T,U> {
+    pub fn infinity(&self) -> Node<E,V> {
         self.infinity.clone()
     }
 
-    pub fn min(&mut self, fv: T, f: &Node<T,U>, gv: T, g: &Node<T,U>) -> Edge<T,U> {
+    pub fn min(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> EvEdge<E,V> {
         let mu = std::cmp::min(fv, gv);
         let key = (Operation::MIN, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {
-            Some(x) => Edge::new(mu+x.value, x.node.clone()),
+            Some(x) => Edge::new(mu+x.value(), x.node().clone()),
             None => {
                 match (f, g) {
-                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == U::low() && gnode.value == U::low() => Edge::new(T::zero(), self.infinity()),
-                    (Node::Terminal(fnode), _) if fnode.value == U::low() => Edge::new(gv, g.clone()),
-                    (_, Node::Terminal(gnode)) if gnode.value == U::low() => Edge::new(fv, f.clone()),
-                    (Node::Terminal(fnode), _) if fnode.value == U::high() => Edge::new(mu, self.omega()),
-                    (_, Node::Terminal(gnode)) if gnode.value == U::high() => Edge::new(mu, self.omega()),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
-                        let edges = fnode.edges.iter()
-                            .map(|fedge| self.min(fv+fedge.value, &fedge.node, gv, g)).collect::<Vec<_>>();
-                        let edge = Edge::new(T::zero(), self.create_node(&fnode.header, &edges));
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value() == V::low() && gnode.value() == V::low() => Edge::new(E::zero(), self.infinity()),
+                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => Edge::new(gv, g.clone()),
+                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => Edge::new(fv, f.clone()),
+                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => Edge::new(mu, self.omega()),
+                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => Edge::new(mu, self.omega()),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
+                        let edges = fnode.iter()
+                            .map(|fedge| self.min(fv+fedge.value(), fedge.node(), gv, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(E::zero(), self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
-                        let edges = gnode.edges.iter()
-                            .map(|gedge| self.min(fv, f, gv+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(T::zero(), self.create_node(&gnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
+                        let edges = gnode.iter()
+                            .map(|gedge| self.min(fv, f, gv+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(E::zero(), self.create_node(gnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
-                        let edges = fnode.edges.iter().zip(gnode.edges.iter())
-                            .map(|(fedge,gedge)| self.min(fv-mu+fedge.value, &fedge.node, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
+                        let edges = fnode.iter().zip(gnode.iter())
+                            .map(|(fedge,gedge)| self.min(fv-mu+fedge.value(), fedge.node(), gv-mu+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
@@ -222,50 +188,50 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
         }
     }
     
-    pub fn max(&mut self, fv: T, f: &Node<T,U>, gv: T, g: &Node<T,U>) -> Edge<T,U> {
+    pub fn max(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> EvEdge<E,V> {
         let mu = std::cmp::min(fv, gv);
         let key = (Operation::MAX, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {
-            Some(x) => Edge::new(mu+x.value, x.node.clone()),
+            Some(x) => Edge::new(mu+x.value(), x.node().clone()),
             None => {
                 match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == U::low() => Edge::new(T::zero(), self.infinity()),
-                    (_, Node::Terminal(gnode)) if gnode.value == U::low() => Edge::new(T::zero(), self.infinity()),
-                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == U::high() && gnode.value == U::high() => Edge::new(std::cmp::max(fv, gv), self.omega()),
-                    (Node::Terminal(fnode), Node::NonTerminal(_)) if fnode.value == U::high() && fv <= gv => Edge::new(gv, g.clone()),
-                    (Node::NonTerminal(_), Node::Terminal(gnode)) if gnode.value == U::high() && fv >= gv => Edge::new(fv, f.clone()),
-                    (Node::Terminal(fnode), Node::NonTerminal(gnode)) if fnode.value == U::high() && fv > gv => {
-                        let edges = gnode.edges.iter()
-                            .map(|gedge| self.max(fv-mu, f, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&gnode.header, &edges));
+                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => Edge::new(E::zero(), self.infinity()),
+                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => Edge::new(E::zero(), self.infinity()),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value() == V::high() && gnode.value() == V::high() => Edge::new(std::cmp::max(fv, gv), self.omega()),
+                    (Node::Terminal(fnode), Node::NonTerminal(_)) if fnode.value() == V::high() && fv <= gv => Edge::new(gv, g.clone()),
+                    (Node::NonTerminal(_), Node::Terminal(gnode)) if gnode.value() == V::high() && fv >= gv => Edge::new(fv, f.clone()),
+                    (Node::Terminal(fnode), Node::NonTerminal(gnode)) if fnode.value() == V::high() && fv > gv => {
+                        let edges = gnode.iter()
+                            .map(|gedge| self.max(fv-mu, f, gv-mu+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(gnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::Terminal(gnode)) if gnode.value == U::high() && fv < gv => {
-                        let edges = fnode.edges.iter()
-                            .map(|fedge| self.max(fv-mu+fedge.value, &fedge.node, gv-mu, g)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::Terminal(gnode)) if gnode.value() == V::high() && fv < gv => {
+                        let edges = fnode.iter()
+                            .map(|fedge| self.max(fv-mu+fedge.value(), fedge.node(), gv-mu, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
-                        let edges = fnode.edges.iter()
-                            .map(|fedge| self.max(fv-mu+fedge.value, &fedge.node, gv-mu, g)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
+                        let edges = fnode.iter()
+                            .map(|fedge| self.max(fv-mu+fedge.value(), fedge.node(), gv-mu, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
-                        let edges = gnode.edges.iter()
-                            .map(|gedge| self.max(fv-mu, f, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&gnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
+                        let edges = gnode.iter()
+                            .map(|gedge| self.max(fv-mu, f, gv-mu+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(gnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
-                        let edges = fnode.edges.iter().zip(gnode.edges.iter())
-                            .map(|(fedge,gedge)| self.max(fv-mu+fedge.value, &fedge.node, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
+                        let edges = fnode.iter().zip(gnode.iter())
+                            .map(|(fedge,gedge)| self.max(fv-mu+fedge.value(), fedge.node(), gv-mu+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
@@ -275,36 +241,36 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
         }
     }
 
-    pub fn add(&mut self, fv: T, f: &Node<T,U>, gv: T, g: &Node<T,U>) -> Edge<T,U> {
+    pub fn add(&mut self, fv: E, f: &Node<E,V>, gv: E, g: &Node<E,V>) -> EvEdge<E,V> {
         let mu = std::cmp::min(fv, gv);
         let key = (Operation::ADD, f.id(), g.id(), fv-gv);
         match self.cache.get(&key) {
-            Some(x) => Edge::new(mu+mu+x.value, x.node.clone()),
+            Some(x) => Edge::new(mu+mu+x.value(), x.node().clone()),
             None => {
                 match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value == U::low() => Edge::new(T::zero(), self.infinity()),
-                    (_, Node::Terminal(gnode)) if gnode.value == U::low() => Edge::new(T::zero(), self.infinity()),
-                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value == U::high() && gnode.value == U::high() => Edge::new(fv+gv, self.omega()),
-                    (Node::Terminal(fnode), Node::NonTerminal(_)) if fnode.value == U::high() => Edge::new(fv+gv, g.clone()),
-                    (Node::NonTerminal(_), Node::Terminal(gnode)) if gnode.value == U::high() => Edge::new(fv+gv, f.clone()),
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() > gnode.header.level() => {
-                        let edges = fnode.edges.iter()
-                            .map(|fedge| self.add(fv-mu+fedge.value, &fedge.node, gv-mu, g)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&fnode.header, &edges));
+                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => Edge::new(E::zero(), self.infinity()),
+                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => Edge::new(E::zero(), self.infinity()),
+                    (Node::Terminal(fnode), Node::Terminal(gnode)) if fnode.value() == V::high() && gnode.value() == V::high() => Edge::new(fv+gv, self.omega()),
+                    (Node::Terminal(fnode), Node::NonTerminal(_)) if fnode.value() == V::high() => Edge::new(fv+gv, g.clone()),
+                    (Node::NonTerminal(_), Node::Terminal(gnode)) if gnode.value() == V::high() => Edge::new(fv+gv, f.clone()),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
+                        let edges = fnode.iter()
+                            .map(|fedge| self.add(fv-mu+fedge.value(), fedge.node(), gv-mu, g)).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() < gnode.header.level() => {
-                        let edges = gnode.edges.iter()
-                            .map(|gedge| self.add(fv-mu, f, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu, self.create_node(&gnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
+                        let edges = gnode.iter()
+                            .map(|gedge| self.add(fv-mu, f, gv-mu+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(mu, self.create_node(gnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
-                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.header.level() == gnode.header.level() => {
-                        let edges = fnode.edges.iter().zip(gnode.edges.iter())
-                            .map(|(fedge,gedge)| self.add(fv-mu+fedge.value, &fedge.node, gv-mu+gedge.value, &gedge.node)).collect::<Vec<_>>();
-                        let edge = Edge::new(mu+mu, self.create_node(&fnode.header, &edges));
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
+                        let edges = fnode.iter().zip(gnode.iter())
+                            .map(|(fedge,gedge)| self.add(fv-mu+fedge.value(), fedge.node(), gv-mu+gedge.value(), gedge.node())).collect::<Vec<_>>();
+                        let edge = Edge::new(mu+mu, self.create_node(fnode.header(), &edges));
                         self.cache.insert(key, edge.clone());
                         edge
                     },
@@ -330,7 +296,7 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
     //     }
     //     match f {
     //         Node::NonTerminal(fnode) => {
-    //             let key = (fnode.header.id(), fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
+    //             let key = (fnode.id(), fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
     //             self.utable.insert(key, f.clone());
     //             for x in fnode.nodes.iter() {
     //                 self.make_utable_(&x, visited);
@@ -341,7 +307,7 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
     //     visited.insert(f.clone());
     // }
 
-    pub fn dot<V>(&self, io: &mut V, f: &Node<T,U>) where V: std::io::Write {
+    pub fn dot<T>(&self, io: &mut T, f: &Node<E,V>) where T: std::io::Write {
         let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
         let s2 = "}\n";
         let mut visited = HashSet::new();
@@ -350,26 +316,26 @@ impl<T,U> EVMDD<T,U> where T: EdgeValue, U: TerminalBin {
         io.write(s2.as_bytes()).unwrap();
     }
 
-    pub fn dot_<V>(&self, io: &mut V, f: &Node<T,U>, visited: &mut HashSet<Node<T,U>>) where V: std::io::Write {
+    pub fn dot_<T>(&self, io: &mut T, f: &Node<E,V>, visited: &mut HashSet<Node<E,V>>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
         match f {
-            Node::Terminal(fnode) if fnode.value == U::high() => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id, fnode.value);
+            Node::Terminal(fnode) if fnode.value() == V::high() => {
+                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id, fnode.header.label());
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
-                for (i,e) in fnode.edges.iter().enumerate() {
-                    self.dot_(io, &e.node, visited);
-                    if &e.node != &self.infinity {
-                        let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id, e.node.id(), e.value, e.value);
+                for (i,e) in fnode.iter().enumerate() {
+                    self.dot_(io, e.node(), visited);
+                    if e.node() != &self.infinity {
+                        let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id(), e.node().id(), e.value(), e.value());
                         io.write(s.as_bytes()).unwrap();
-                        let s = format!("\"obj{}\" -> \"obj{}:{}:{}\" [label=\"{}\", arrowhead=none];\n", fnode.id, fnode.id, e.node.id(), e.value, i);
+                        let s = format!("\"obj{}\" -> \"obj{}:{}:{}\" [label=\"{}\", arrowhead=none];\n", fnode.id(), fnode.id(), e.node().id(), e.value(), i);
                         io.write(s.as_bytes()).unwrap();
-                        let s = format!("\"obj{}:{}:{}\" -> \"obj{}\";\n", fnode.id, e.node.id(), e.value, e.node.id());
+                        let s = format!("\"obj{}:{}:{}\" -> \"obj{}\";\n", fnode.id(), e.node().id(), e.value(), e.node().id());
                         io.write(s.as_bytes()).unwrap();
                     }
                 }
@@ -391,26 +357,26 @@ mod tests {
     //     }
     // }
 
-    pub fn table<T,U>(dd: &EVMDD<T,U>, fv: T, f: &Node<T,U>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue, U: TerminalBin {
+    pub fn table<E,V>(dd: &EVMDD<E,V>, fv: E, f: &Node<E,V>) -> Vec<(Vec<usize>,Option<E>)> where E: EdgeValue, V: TerminalBinaryValue {
         let mut tab = Vec::new();
         let p = Vec::new();
         table_(dd, f, &p, &mut tab, fv);
         tab
     }
 
-    pub fn table_<T,U>(dd: &EVMDD<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue, U: TerminalBin {
+    pub fn table_<E,V>(dd: &EVMDD<E,V>, f: &Node<E,V>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<E>)>, s: E) where E: EdgeValue, V: TerminalBinaryValue {
         match f {
-            Node::Terminal(fnode) if fnode.value == U::low() => {
+            Node::Terminal(fnode) if fnode.value() == V::low() => {
                 tab.push((path.to_vec(), None));
             },
-            Node::Terminal(fnode) if fnode.value == U::high() => {
+            Node::Terminal(fnode) if fnode.value() == V::high() => {
                 tab.push((path.to_vec(), Some(s)));
             },
             Node::NonTerminal(fnode) => {
-                for (i,e) in fnode.edges.iter().enumerate() {
+                for (i,e) in fnode.iter().enumerate() {
                     let mut p = path.to_vec();
                     p.push(i);
-                    table_(dd, &e.node, &p, tab, s + e.value);
+                    table_(dd, e.node(), &p, tab, s + e.value());
                 }
             },
             _ => (),
@@ -437,13 +403,13 @@ mod tests {
 
     #[test]
     fn new_nonterminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero: Node<i32,_> = Node::new_terminal(0, false);
+        let one: Node<i32,_> = Node::new_terminal(1, true);
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = Node::new_nonterminal(3, &h, &vec![Edge::new(1, zero), Edge::new(2, one)]);
         println!("{:?}", x);
         if let Node::NonTerminal(x) = &x {
-            println!("{:?}", x.header);
+            println!("{:?}", x.header());
         }
         println!("{:?}", x.header());
     }
@@ -549,12 +515,12 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z.node);
+            dd.dot(&mut io, z.node());
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
-        for x in table(&dd, z.value, &z.node) {
+        for x in table(&dd, z.value(), z.node()) {
             println!("{:?}", x);
         }
     }
@@ -583,12 +549,12 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z.node);
+            dd.dot(&mut io, &z.node());
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
-        for x in table(&dd, z.value, &z.node) {
+        for x in table(&dd, z.value(), &z.node()) {
             println!("{:?}", x);
         }
     }
@@ -617,12 +583,12 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z.node);
+            dd.dot(&mut io, &z.node());
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
-        for x in table(&dd, z.value, &z.node) {
+        for x in table(&dd, z.value(), &z.node()) {
             println!("{:?}", x);
         }
     }
