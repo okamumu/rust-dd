@@ -34,6 +34,24 @@ pub type Node<E,V> = EVMDDNode<E,V>;
 pub type Edge<E,V> = EvEdge<E,EVMDDNode<E,V>>;
 
 #[derive(Debug,Clone)]
+pub enum EVMDDEdge<E,V> {
+    Finite(EvEdge<E,EVMDDNode<E,V>>),
+    Infinite,
+}
+
+impl<E,V> PartialEq for EVMDDEdge<E,V> where E: EdgeValue, V: TerminalBinaryValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Finite(x), Self::Finite(y)) => x.eq(y),
+            (Self::Infinite, Self::Infinite) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<E,V> Eq for EVMDDEdge<E,V> where E: EdgeValue, V: TerminalBinaryValue {}
+
+#[derive(Debug,Clone)]
 pub enum EVMDDNode<E,V> {
     NonTerminal(Rc<NonTerminalMDD<EvEdge<E,EVMDDNode<E,V>>>>),
     Terminal(Rc<TerminalBinary<V>>),
@@ -290,28 +308,30 @@ impl<E,V> EVMDD<E,V> where E: EdgeValue, V: TerminalBinaryValue {
         self.cache.clear();
     }
     
-    // pub fn make_utable(&mut self, f: &Node) {
-    // self.utable.clear();
-    //     let mut visited = HashSet::new();
-    //     self.make_utable_(f, &mut visited);
-    // }
+    pub fn rebuild(&mut self, fs: &[Node<E,V>]) {
+        self.utable.clear();
+        let mut visited = HashSet::new();
+        for x in fs.iter() {
+            self.rebuild_table(x, &mut visited);
+        }
+    }
 
-    // fn make_utable_(&mut self, f: &Node, visited: &mut HashSet<Node>) {
-    //     if visited.contains(f) {
-    //         return
-    //     }
-    //     match f {
-    //         Node::NonTerminal(fnode) => {
-    //             let key = (fnode.id(), fnode.nodes.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
-    //             self.utable.insert(key, f.clone());
-    //             for x in fnode.nodes.iter() {
-    //                 self.make_utable_(&x, visited);
-    //             }
-    //         },
-    //         _ => (),
-    //     };
-    //     visited.insert(f.clone());
-    // }
+    fn rebuild_table(&mut self, f: &Node<E,V>, visited: &mut HashSet<Node<E,V>>) {
+        if visited.contains(f) {
+            return
+        }
+        match f {
+            Node::NonTerminal(fnode) => {
+                let key = (fnode.header().id(), fnode.iter().map(|x| (x.value(), x.node().id())).collect::<Vec<_>>().into_boxed_slice());
+                self.utable.insert(key, f.clone());
+                for x in fnode.iter() {
+                    self.rebuild_table(x.node(), visited);
+                }
+            },
+            _ => (),
+        };
+        visited.insert(f.clone());
+    }
 
     pub fn dot<T>(&self, io: &mut T, f: &Node<E,V>) where T: std::io::Write {
         let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";

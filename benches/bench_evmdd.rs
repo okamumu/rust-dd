@@ -1,6 +1,6 @@
 use dd::common::*;
 use dd::nodes::*;
-use dd::ev_plus_mdd::{
+use dd::evplus_mdd::{
     EVMDD,
     Node,
 };

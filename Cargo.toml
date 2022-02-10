@@ -19,5 +19,9 @@ name = "bench_mdd"
 harness = false
 
 [[bench]]
+name = "bench_mtmdd"
+harness = false
+
+[[bench]]
 name = "bench_evmdd"
 harness = false

@@ -32,11 +32,22 @@ pub type Node<V> = MDDNode<V>;
 pub enum MDDNode<V> {
     NonTerminal(Rc<NonTerminalMDD<MDDNode<V>>>),
     Terminal(Rc<TerminalBinary<V>>),
+    Default,
+}
+
+impl<V> Default for Node<V> {
+    fn default() -> Self {
+        Self::Default
+    }
 }
 
 impl<V> PartialEq for MDDNode<V> where V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        match (self, other) {
+            (Self::NonTerminal(x), Self::NonTerminal(y)) => x.id() == y.id(),
+            (Self::Terminal(x), Self::Terminal(y)) => x.value() == y.value(),
+            _ => false
+        }
     }
 }
 
@@ -67,6 +78,7 @@ impl<V> MDDNode<V> where V: TerminalBinaryValue {
         match self {
             Self::NonTerminal(x) => x.id(),
             Self::Terminal(x) => x.id(),
+            _ => 0,
         }        
     }
 
@@ -274,11 +286,11 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
-            self.make_utable_(x, &mut visited);
+            self.rebuild_table(x, &mut visited);
         }
     }
 
-    fn make_utable_(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
+    fn rebuild_table(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
         if visited.contains(f) {
             return
         }
@@ -287,7 +299,7 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
                 let key = (fnode.header().id(), fnode.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
                 self.utable.insert(key, f.clone());
                 for x in fnode.iter() {
-                    self.make_utable_(&x, visited);
+                    self.rebuild_table(&x, visited);
                 }
             },
             _ => (),
@@ -322,6 +334,7 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
                     io.write(s.as_bytes()).unwrap();
                 }
             },
+            _ => (),
         };
         visited.insert(f.clone());
     }
@@ -448,4 +461,25 @@ mod tests {
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
     }
+
+    // #[test]
+    // fn test_mdd_pset() {
+    //     let mut dd: MDD = MDD::new();
+    //     let h1 = NodeHeader::new(0, 0, "x", 2);
+    //     let h2 = NodeHeader::new(1, 1, "y", 2);
+    //     let pset = vec![
+    //         vec![0,0],
+    //         vec![1,0],
+    //     ];
+
+    //     let b = dd.from_pset(&vec![h1, h2], pset);
+
+    //     let mut buf = vec![];
+    //     {
+    //         let mut io = BufWriter::new(&mut buf);
+    //         dd.dot(&mut io, &b);
+    //     }
+    //     let s = std::str::from_utf8(&buf).unwrap();
+    //     println!("{}", s);
+    // }
 }

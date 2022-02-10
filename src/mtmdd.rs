@@ -28,29 +28,29 @@ enum Operation {
     MAX,
 }
 
-pub type Node<V> = MtMDDNode<V>;
+pub type Node<V> = MTMDDNode<V>;
 
 #[derive(Debug,Clone)]
-pub enum MtMDDNode<V> {
-    NonTerminal(Rc<NonTerminalMDD<MtMDDNode<V>>>),
+pub enum MTMDDNode<V> {
+    NonTerminal(Rc<NonTerminalMDD<MTMDDNode<V>>>),
     Terminal(Rc<TerminalNumber<V>>),
 }
 
-impl<V> PartialEq for MtMDDNode<V> where V: TerminalNumberValue {
+impl<V> PartialEq for MTMDDNode<V> where V: TerminalNumberValue {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
 }
 
-impl<V> Eq for MtMDDNode<V> where V: TerminalNumberValue {}
+impl<V> Eq for MTMDDNode<V> where V: TerminalNumberValue {}
 
-impl<V> Hash for MtMDDNode<V> where V: TerminalNumberValue {
+impl<V> Hash for MTMDDNode<V> where V: TerminalNumberValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<V> MtMDDNode<V> where V: TerminalNumberValue {
+impl<V> MTMDDNode<V> where V: TerminalNumberValue {
     pub fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Self]) -> Self {
         let x = NonTerminalMDD::new(
             id,
@@ -88,7 +88,7 @@ impl<V> MtMDDNode<V> where V: TerminalNumberValue {
 }
 
 #[derive(Debug)]
-pub struct MtMDD<V> {
+pub struct MTMDD<V> {
     num_headers: HeaderId,
     num_nodes: NodeId,
     vtable: HashMap<V,Node<V>>,
@@ -96,7 +96,7 @@ pub struct MtMDD<V> {
     cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
 }
 
-impl<V> MtMDD<V> where V: TerminalNumberValue {
+impl<V> MTMDD<V> where V: TerminalNumberValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
@@ -379,11 +379,11 @@ impl<V> MtMDD<V> where V: TerminalNumberValue {
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
-            self.make_utable_(x, &mut visited);
+            self.rebuild_tables(x, &mut visited);
         }
     }
 
-    fn make_utable_(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
+    fn rebuild_tables(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
         if visited.contains(f) {
             return
         }
@@ -395,7 +395,7 @@ impl<V> MtMDD<V> where V: TerminalNumberValue {
                 let key = (fnode.header().id(), fnode.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
                 self.utable.insert(key, f.clone());
                 for x in fnode.iter() {
-                    self.make_utable_(&x, visited);
+                    self.rebuild_tables(&x, visited);
                 }
             },
         };
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn new_test1() {
-        let mut dd = MtMDD::new();
+        let mut dd = MTMDD::new();
         let h = NodeHeader::new(0, 0, "x", 2);
         let v = vec![dd.value(0), dd.value(1)];
         let x = dd.create_node(&h, &v);
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn new_test2() {
-        let mut dd = MtMDD::new();
+        let mut dd = MTMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let v = vec![dd.value(0), dd.value(1)];
@@ -505,7 +505,7 @@ mod tests {
     
     #[test]
     fn new_test3() {
-        let mut dd = MtMDD::new();
+        let mut dd = MTMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let v = vec![dd.value(0), dd.value(1)];
@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn new_test4() {
-        let mut dd = MtMDD::new();
+        let mut dd = MTMDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let v = vec![dd.value(0), dd.value(1)];

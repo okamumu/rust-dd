@@ -290,11 +290,11 @@ impl<V> BDD<V> where V: TerminalBinaryValue {
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
-            self.make_utable_(x, &mut visited);
+            self.rebuild_table(x, &mut visited);
         }
     }
 
-    fn make_utable_(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
+    fn rebuild_table(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
         if visited.contains(f) {
             return
         }
@@ -303,7 +303,7 @@ impl<V> BDD<V> where V: TerminalBinaryValue {
                 let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
                 self.utable.insert(key, f.clone());
                 for x in fnode.iter() {
-                    self.make_utable_(&x, visited);
+                    self.rebuild_table(&x, visited);
                 }
             },
             _ => (),
