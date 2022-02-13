@@ -6,3 +6,8 @@ pub mod zdd;
 pub mod mdd;
 pub mod mtmdd;
 pub mod evplus_mdd;
+
+// sample for BDD with NodeId
+// pub mod bdd2;
+// sample for BDD with RefCell
+// pub mod bdd3;

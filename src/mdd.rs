@@ -340,6 +340,16 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
     }
 }
 
+// impl<V> MDD<V> where V: TerminalBinaryValue {
+//     pub fn build_from_pathset<P>(&mut self, headers: &[NodeHeader], pathset: P) {
+//         for x in P {
+//             for i in domain[level] {
+//                 x[level]
+//             }
+//         }
+//     }
+// }
+
 #[cfg(test)]
 mod tests {
     use super::*;

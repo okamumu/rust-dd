@@ -8,6 +8,7 @@ use crate::common::{
     TerminalBinaryValue,
     HashSet,
     HashMap,
+    Dot,
 };
 
 use crate::nodes::{
@@ -36,7 +37,11 @@ pub enum BDDNode<V> {
 
 impl<V> PartialEq for BDDNode<V> where V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        match (self, other) {
+            (Node::NonTerminal(x), Node::NonTerminal(y)) => x.id() == y.id(),
+            (Node::Terminal(x), Node::Terminal(y)) => x.value() == y.value(),
+            _ => false,
+        }
     }
 }
 
@@ -93,17 +98,6 @@ pub struct BDD<V=u8> {
 
 impl<V> BDD<V> where V: TerminalBinaryValue {
     pub fn new() -> Self {
-        Self {
-            num_headers: 0,
-            num_nodes: 2,
-            zero: Node::new_terminal(0, V::low()),
-            one: Node::new_terminal(1, V::high()),
-            utable: HashMap::new(),
-            cache: HashMap::new(),
-        }
-    }
-
-    pub fn new_with_type(_: V) -> Self {
         Self {
             num_headers: 0,
             num_nodes: 2,
@@ -310,30 +304,36 @@ impl<V> BDD<V> where V: TerminalBinaryValue {
         };
         visited.insert(f.clone());
     }
+}
 
-    pub fn dot<U>(&self, io: &mut U, f: &Node<V>) where U: std::io::Write {
+impl<V> Dot for BDD<V> where V: TerminalBinaryValue {
+    type Node = BDDNode<V>;
+
+    fn dot<T>(&self, io: &mut T, f: &Self::Node) where T: std::io::Write {
         let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
         let s2 = "}\n";
-        let mut visited = HashSet::new();
+        let mut visited: HashSet<Self::Node> = HashSet::new();
         io.write(s1.as_bytes()).unwrap();
-        self.dot_(io, f, &mut visited);
+        self.dot_impl(io, f, &mut visited);
         io.write(s2.as_bytes()).unwrap();
     }
+}
 
-    pub fn dot_<U>(&self, io: &mut U, f: &Node<V>, visited: &mut HashSet<Node<V>>) where U: std::io::Write {
+impl<V> BDD<V> where V: TerminalBinaryValue {
+    fn dot_impl<T>(&self, io: &mut T, f: &BDDNode<V>, visited: &mut HashSet<BDDNode<V>>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
         match f {
-            Node::Terminal(fnode) => {
+            BDDNode::Terminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
                 io.write(s.as_bytes()).unwrap();
             },
-            Node::NonTerminal(fnode) => {
+            BDDNode::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    self.dot_(io, x, visited);
+                    self.dot_impl(io, x, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
@@ -343,10 +343,44 @@ impl<V> BDD<V> where V: TerminalBinaryValue {
     }
 }
 
+
+    // pub fn dot<U>(&self, io: &mut U, f: &Node<V>) where U: std::io::Write {
+    //     let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
+    //     let s2 = "}\n";
+    //     let mut visited = HashSet::new();
+    //     io.write(s1.as_bytes()).unwrap();
+    //     self.dot_(io, f, &mut visited);
+    //     io.write(s2.as_bytes()).unwrap();
+    // }
+
+    // pub fn dot_<U>(&self, io: &mut U, f: &Node<V>, visited: &mut HashSet<Node<V>>) where U: std::io::Write {
+    //     if visited.contains(f) {
+    //         return
+    //     }
+    //     match f {
+    //         Node::Terminal(fnode) => {
+    //             let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
+    //             io.write(s.as_bytes()).unwrap();
+    //         },
+    //         Node::NonTerminal(fnode) => {
+    //             let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
+    //             io.write(s.as_bytes()).unwrap();
+    //             for (i,x) in fnode.iter().enumerate() {
+    //                 self.dot_(io, x, visited);
+    //                 let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
+    //                 io.write(s.as_bytes()).unwrap();
+    //             }
+    //         },
+    //     };
+    //     visited.insert(f.clone());
+    // }
+// }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::BufWriter;
+
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
@@ -450,7 +484,7 @@ mod tests {
 
     #[test]
     fn new_test5() {
-        let mut dd = BDD::new_with_type(true);
+        let mut dd: BDD<bool> = BDD::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.zero(), &dd.one());

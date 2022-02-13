@@ -1,8 +1,8 @@
 use std::rc::Rc;
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
-use core::slice::Iter;
-use std::ops::Index;
+use std::slice::{Iter, IterMut};
+use std::ops::{Index, IndexMut};
 
 use crate::common::{
     HeaderId,
@@ -24,13 +24,14 @@ pub trait Terminal {
 }
 
 /// The trait for non-terminal node.
-pub trait NonTerminal {
+pub trait NonTerminal : Index<usize> + IndexMut<usize> {
     type Node;
     fn id(&self) -> NodeId;
     fn header(&self) -> &NodeHeader;
     fn level(&self) -> Level;
     fn label(&self) -> &str;
     fn iter(&self) -> Iter<Self::Node>;
+    fn iter_mut(&mut self) -> IterMut<Self::Node>;
 }
 
 #[derive(Debug)]
@@ -190,11 +191,6 @@ impl<N> NonTerminal for NonTerminalBDD<N> {
     }
 
     #[inline]
-    fn iter(&self) -> Iter<Self::Node> {
-        self.nodes.iter()
-    }
-
-    #[inline]
     fn level(&self) -> Level {
         self.header.level()
     }
@@ -203,14 +199,31 @@ impl<N> NonTerminal for NonTerminalBDD<N> {
     fn label(&self) -> &str {
         self.header.label()
     }
+
+    #[inline]
+    fn iter(&self) -> Iter<Self::Node> {
+        self.nodes.iter()
+    }
+
+    #[inline]
+    fn iter_mut(&mut self) -> IterMut<Self::Node> {
+        self.nodes.iter_mut()
+    }
 }
 
 impl<N> Index<usize> for NonTerminalBDD<N> {
     type Output = N;
 
     #[inline]
-    fn index(&self, i: usize) -> &Self::Output {
-        &self.nodes[i]
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.nodes[index]
+    }
+}
+
+impl<N> IndexMut<usize> for NonTerminalBDD<N> {
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.nodes[index]
     }
 }
 
@@ -246,11 +259,6 @@ impl<N> NonTerminal for NonTerminalMDD<N> {
     }
 
     #[inline]
-    fn iter(&self) -> Iter<Self::Node> {
-        self.nodes.iter()
-    }
-
-    #[inline]
     fn level(&self) -> Level {
         self.header.level()
     }
@@ -258,6 +266,32 @@ impl<N> NonTerminal for NonTerminalMDD<N> {
     #[inline]
     fn label(&self) -> &str {
         self.header.label()
+    }
+
+    #[inline]
+    fn iter(&self) -> Iter<Self::Node> {
+        self.nodes.iter()
+    }
+
+    #[inline]
+    fn iter_mut(&mut self) -> IterMut<Self::Node> {
+        self.nodes.iter_mut()
+    }
+}
+
+impl<N> Index<usize> for NonTerminalMDD<N> {
+    type Output = N;
+
+    #[inline]
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.nodes[index]
+    }
+}
+
+impl<N> IndexMut<usize> for NonTerminalMDD<N> {
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.nodes[index]
     }
 }
 
