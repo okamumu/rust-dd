@@ -1,7 +1,6 @@
 use std::hash::Hash;
 use dd::common::{
     HashMap,
-    TerminalBinaryValue,
 };
 use dd::nodes::{
     NodeHeader,

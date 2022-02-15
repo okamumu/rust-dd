@@ -8,7 +8,6 @@ use crate::common::{
     HeaderId,
     NodeId,
     Level,
-    TerminalBinaryValue,
     TerminalNumberValue,
     EdgeValue,
 };
@@ -96,36 +95,6 @@ impl NodeHeader {
     #[inline]
     pub fn edge_num(&self) -> usize {
         self.edge_num
-    }
-}
-
-#[derive(Debug)]
-pub struct TerminalBinary<V> {
-    id: NodeId,
-    value: V
-}
-
-impl<V> TerminalBinary<V> {
-    #[inline]
-    pub fn new(id: NodeId, value: V) -> Self {
-        Self {
-            id: id,
-            value: value,
-        }
-    }
-}
-
-impl<V> Terminal for TerminalBinary<V> where V: TerminalBinaryValue {
-    type Value = V;
-
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    #[inline]
-    fn value(&self) -> Self::Value {
-        self.value
     }
 }
 

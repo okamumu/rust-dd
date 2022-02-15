@@ -11,29 +11,6 @@ pub type HashSet<T> = std::collections::HashSet<T>;
 // pub type HashMap<T,U> = hashbrown::HashMap<T,U>;
 // pub type HashSet<T> = hashbrown::HashSet<T>;
 
-pub trait TerminalBinaryValue:
-    Copy
-    + Clone
-    + PartialEq
-    + Eq
-    + Hash
-    + Display
-    + Debug
-{
-    fn high() -> Self;
-    fn low() -> Self;
-}
-
-impl TerminalBinaryValue for bool {
-    fn high() -> Self { true }
-    fn low() -> Self { false }
-}
-
-impl TerminalBinaryValue for u8 {
-    fn high() -> Self { 1 }
-    fn low() -> Self { 0 }
-}
-
 pub trait TerminalNumberValue:
     Copy
     + Clone
