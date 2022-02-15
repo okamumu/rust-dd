@@ -1,7 +1,7 @@
 use dd::common::*;
 use dd::nodes::*;
 use dd::bdd::*;
-use dd::dot::*;
+// use dd::dot::*;
 
 type Node<V> = BddNode<V>;
 
@@ -12,61 +12,78 @@ fn clock<F>(s: &str, f: F) where F: FnOnce() {
     println!("{}: time {}", s, end.as_secs_f64());
 }
 
-// pub fn table<T>(dd: &Bdd<T>, f: &Node<T>) -> Vec<(Vec<usize>,usize)> where T: TerminalBinaryValue {
-//     let mut tab = Vec::new();
-//     let p = vec![0; dd.size().0];
-//     table_(dd, f.level().unwrap(), f, &p, &mut tab);
-//     tab
-// }
+#[derive(Debug,Clone,Copy)]
+enum Binary {
+    Zero,
+    One,
+    Undet,
+}
 
-// pub fn table_<T>(dd: &Bdd<T>, level: Level, f: &Node<T>, path: &[usize], tab: &mut Vec<(Vec<usize>,usize)>) where T: TerminalBinaryValue {
-//     println!("enter {}", level);
-//     match f {
-//         Node::Terminal(fnode) if fnode.value() == T::low() => {
-//             println!("match terminal 1");
-//             let p = path.to_vec();
-//             tab.push((p,0));
-//             println!("{:?}", tab);
-//         },
-//         Node::Terminal(fnode) if fnode.value() == T::high() => {
-//             println!("match terminal 2");
-//             let p = path.to_vec();
-//             tab.push((p,1));
-//             println!("{:?}", tab);
-//         },
-//         Node::NonTerminal(fnode) => {
-//             println!("match nonterminal");
-//             for (i,e) in fnode.iter().enumerate() {
-//                 println!("loop {} level {} next node {:?}", i, level, e);
-//                 let mut p = path.to_vec();
-//                 match e.level() {
-//                     Some(l) if l == level-1 => {
-//                         println!("go 1");
-//                         p.push(i);
-//                         table_(dd, level-1, e, &p, tab);
-//                     },
-//                     Some(l) if l < level-1 => {
-//                         println!("go 2");
-//                         p.push(i);
-//                         table_(dd, level-1, e, &p, tab);
-//                     },
-//                     None if level == 0 => {
-//                         println!("go 3");
-//                         p.push(i);
-//                         table_(dd, level-1, e, &p, tab);
-//                     },
-//                     None if level > 0 => {
-//                         println!("go 4");
-//                         p.push(i);
-//                         table_(dd, level-1, e, &p, tab);
-//                     },
-//                     _ => (),
-//                 }
-//             }
-//         },
-//         _ => (),
-//     };
-// }
+trait Print {
+    fn print(&self);
+}
+
+impl Print for Vec<(Vec<Binary>,Binary)> {
+    fn print(&self) {
+        for (x,y) in self {
+            for v in x.iter().rev() {
+                match v {
+                    Binary::Zero => print!("0 "),
+                    Binary::One => print!("1 "),
+                    Binary::Undet => print!("U "),
+                }
+            }
+            match y {
+                Binary::Zero => println!("| 0"),
+                Binary::One => println!("| 1"),
+                _ => (),
+            }
+        }
+    }
+}
+
+fn table<T>(dd: &Bdd<T>, f: &Node<T>) -> Vec<(Vec<Binary>,Binary)> where T: TerminalBinaryValue {
+    let mut tab = Vec::new();
+    let p = Vec::new();
+    table_impl(dd, f.level().unwrap()+1, f, &p, &mut tab);
+    tab
+}
+
+fn table_impl<T>(dd: &Bdd<T>, level: Level, f: &Node<T>,
+        path: &[Binary], tab: &mut Vec<(Vec<Binary>,Binary)>) where T: TerminalBinaryValue {
+    match f {
+        Node::Terminal(fnode) if fnode.value() == T::low() => {
+            let mut p = path.to_vec();
+            for _ in 0..level {
+                p.push(Binary::Undet);
+            }
+            tab.push((p,Binary::Zero));
+        },
+        Node::Terminal(fnode) if fnode.value() == T::high() => {
+            let mut p = path.to_vec();
+            for _ in 0..level {
+                p.push(Binary::Undet);
+            }
+            tab.push((p,Binary::One));
+        },
+        Node::NonTerminal(fnode) => {
+            let current_level = fnode.level();
+            for (i,e) in fnode.iter().enumerate() {
+                let mut p = path.to_vec();
+                for _ in current_level..level-1 {
+                    p.push(Binary::Undet);
+                }
+                match i {
+                    0 => p.push(Binary::Zero),
+                    1 => p.push(Binary::One),
+                    _ => (),
+                }
+                table_impl(dd, current_level, e, &p, tab);
+            }
+        },
+        _ => (),
+    };
+}
 
 fn bench_bdd1 () {
     let n = 1000;
@@ -75,31 +92,32 @@ fn bench_bdd1 () {
     let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
 
     let mut b = f.one();
-    for i in 0..n {
-        b = f.and(&b, &x[i]);
-    }    
-    println!("bdd2 node {:?}", f.size());
+    clock("-bench bdd1-1", ||{
+        for i in 0..n {
+            b = f.and(&b, &x[i]);
+        }
+    });
+    println!("-bdd2 node {:?}", f.size());
 }
 
 fn bench_bdd2 () {
     let n = 1000;
     let mut f: Bdd = Bdd::new();
     let mut b = f.one();
-    {
+    clock("-bench bdd2-1", ||{
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
         let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
     
         for i in (0..n).rev() {
             b = f.and(&b, &x[i]);
         }
-    
-        println!("bdd2 node {:?}", f.size());
-    }
-    {
+    });
+    println!("-bdd2 node {:?}", f.size());
+    clock("-bench bdd2-2", ||{
         f.clear();
         f.rebuild(&vec![b]);
-        println!("bdd2 node {:?}", f.size());
-    }
+    });
+    println!("-bdd2 node {:?}", f.size());
 }
 
 fn bench_bdd3 () {
@@ -110,12 +128,13 @@ fn bench_bdd3 () {
 
     let b = f.and(&x[0], &x[1]);
     let b = f.or(&b, &x[2]);
-    println!("bdd2 node {:?}", f.size());
-    // println!("bdd table {:?}", table(&f, &b));
+    println!("   bdd2 node {:?}", f.size());
+    let result = table(&f, &b);
+    result.print();
 }
 
 fn main() {
-    clock("bdd1", bench_bdd1);
-    clock("bdd2", bench_bdd2);
-    clock("bdd3", bench_bdd3);
+    clock("bench bdd1", bench_bdd1);
+    clock("bench bdd2", bench_bdd2);
+    clock("bench bdd3", bench_bdd3);
 }
