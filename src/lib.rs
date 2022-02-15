@@ -12,4 +12,4 @@ pub mod evplus_mdd;
 // pub mod bdd2;
 
 // sample for BDD with RefCell
-pub mod bdd3;
+pub mod bdd_mut;

@@ -1,10 +1,7 @@
 use dd::common::*;
 use dd::nodes::*;
-use dd::bdd::{
-    Bdd,
-    BddNode,
-};
-use dd::dot::Dot;
+use dd::bdd::*;
+use dd::dot::*;
 
 type Node<V> = BddNode<V>;
 
