@@ -66,8 +66,3 @@ pub trait EdgeValue:
 
 impl EdgeValue for i32 {}
 impl EdgeValue for i64 {}
-
-pub trait Dot {
-    type Node;
-    fn dot<T>(&self, io: &mut T, f: &Self::Node) where T: std::io::Write;
-}

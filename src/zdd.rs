@@ -15,8 +15,12 @@ use crate::nodes::{
     NonTerminal,
 };
 
+use crate::dot::{
+    Dot,
+};
+
 use crate::bdd::{
-    BDDNode,
+    BddNode,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -28,10 +32,11 @@ enum Operation {
     PRODUCT,
 }
 
-pub type Node<V> = BDDNode<V>;
+pub type ZddNode<V> = BddNode<V>;
+type Node<V> = BddNode<V>;
 
 #[derive(Debug)]
-pub struct ZDD<V=u8> {
+pub struct Zdd<V=u8> {
     num_headers: HeaderId,
     num_nodes: NodeId,
     zero: Node<V>,
@@ -40,7 +45,7 @@ pub struct ZDD<V=u8> {
     cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
 }
 
-impl<V> ZDD<V> where V: TerminalBinaryValue {
+impl<V> Zdd<V> where V: TerminalBinaryValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
@@ -276,17 +281,12 @@ impl<V> ZDD<V> where V: TerminalBinaryValue {
         };
         visited.insert(f.clone());
     }
+}
 
-    pub fn dot<U>(&self, io: &mut U, f: &Node<V>) where U: std::io::Write {
-        let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
-        let s2 = "}\n";
-        let mut visited = HashSet::new();
-        io.write(s1.as_bytes()).unwrap();
-        self.dot_(io, f, &mut visited);
-        io.write(s2.as_bytes()).unwrap();
-    }
+impl<V> Dot for Zdd<V> where V: TerminalBinaryValue {
+    type Node = Node<V>;
 
-    pub fn dot_<U>(&self, io: &mut U, f: &Node<V>, visited: &mut HashSet<Node<V>>) where U: std::io::Write {
+    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
@@ -299,7 +299,7 @@ impl<V> ZDD<V> where V: TerminalBinaryValue {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    self.dot_(io, x, visited);
+                    self.dot_impl(io, x, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn new_test1() {
-        let mut dd: ZDD = ZDD::new();
+        let mut dd: Zdd = Zdd::new();
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = dd.create_node(&h, &dd.zero(), &dd.one());
         println!("{:?}", x);
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn new_test2() {
-        let mut dd: ZDD = ZDD::new();
+        let mut dd: Zdd = Zdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.one(), &dd.one());
@@ -379,7 +379,7 @@ mod tests {
     
     #[test]
     fn new_test3() {
-        let mut dd: ZDD = ZDD::new();
+        let mut dd: Zdd = Zdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.one(), &dd.one());
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn new_test4() {
-        let mut dd: ZDD = ZDD::new();
+        let mut dd: Zdd = Zdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &dd.zero(), &dd.one());

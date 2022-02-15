@@ -19,6 +19,10 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
+use crate::dot::{
+    Dot,
+};
+
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     NOT,
@@ -27,16 +31,16 @@ enum Operation {
     XOR,
 }
 
-type Node<V> = BDD3Node<V>;
+pub type Node<V> = BddMutNode<V>;
 
 #[derive(Debug,Clone)]
-pub enum BDD3Node<V> {
-    NonTerminal(Rc<RefCell<NonTerminalBDD<BDD3Node<V>>>>),
+pub enum BddMutNode<V> {
+    NonTerminal(Rc<RefCell<NonTerminalBDD<Node<V>>>>),
     Terminal(Rc<TerminalBinary<V>>),
     None,
 }
 
-impl<V> PartialEq for BDD3Node<V> where V: TerminalBinaryValue {
+impl<V> PartialEq for Node<V> where V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Node::NonTerminal(x), Node::NonTerminal(y)) => x.borrow().id() == y.borrow().id(),
@@ -46,15 +50,15 @@ impl<V> PartialEq for BDD3Node<V> where V: TerminalBinaryValue {
     }
 }
 
-impl<V> Eq for BDD3Node<V> where V: TerminalBinaryValue {}
+impl<V> Eq for Node<V> where V: TerminalBinaryValue {}
 
-impl<V> Hash for BDD3Node<V> where V: TerminalBinaryValue {
+impl<V> Hash for Node<V> where V: TerminalBinaryValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<V> BDD3Node<V> where V: TerminalBinaryValue {
+impl<V> Node<V> where V: TerminalBinaryValue {
     pub fn new_nonterminal(id: NodeId, header: &NodeHeader, low: &Self, high: &Self) -> Self {
         let x = NonTerminalBDD::new(id, header.clone(), [low.clone(), high.clone()]);
         Self::NonTerminal(Rc::new(RefCell::new(x)))
@@ -89,7 +93,7 @@ impl<V> BDD3Node<V> where V: TerminalBinaryValue {
 }
 
 #[derive(Debug)]
-pub struct BDD3<V=u8> {
+pub struct BddMut<V=u8> {
     num_headers: HeaderId,
     num_nodes: NodeId,
     zero: Node<V>,
@@ -98,7 +102,7 @@ pub struct BDD3<V=u8> {
     cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
 }
 
-impl<V> BDD3<V> where V: TerminalBinaryValue {
+impl<V> BddMut<V> where V: TerminalBinaryValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
@@ -307,17 +311,12 @@ impl<V> BDD3<V> where V: TerminalBinaryValue {
         };
         visited.insert(f.clone());
     }
+}
 
-    pub fn dot<U>(&self, io: &mut U, f: &Node<V>) where U: std::io::Write {
-        let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
-        let s2 = "}\n";
-        let mut visited = HashSet::new();
-        io.write(s1.as_bytes()).unwrap();
-        self.dot_(io, f, &mut visited);
-        io.write(s2.as_bytes()).unwrap();
-    }
+impl<V> Dot for BddMut<V> where V: TerminalBinaryValue {
+    type Node = Node<V>;
 
-    pub fn dot_<U>(&self, io: &mut U, f: &Node<V>, visited: &mut HashSet<Node<V>>) where U: std::io::Write {
+    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
@@ -330,7 +329,7 @@ impl<V> BDD3<V> where V: TerminalBinaryValue {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.borrow().id(), fnode.borrow().label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.borrow().iter().enumerate() {
-                    self.dot_(io, x, visited);
+                    self.dot_impl(io, x, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.borrow().id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
@@ -344,7 +343,7 @@ impl<V> BDD3<V> where V: TerminalBinaryValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::BufWriter;
+    // use std::io::BufWriter;
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
@@ -376,7 +375,7 @@ mod tests {
         let zero = Node::new_terminal(1, false);
         let one = Node::new_terminal(2, true);
         let h = NodeHeader::new(0, 0, "x", 2);
-        let x: BDD3Node<bool> = Node::new_nonterminal(3, &h, &none, &none);
+        let x: Node<bool> = Node::new_nonterminal(3, &h, &none, &none);
         println!("{:?}", x);
         if let Node::NonTerminal(v) = &x {
             v.borrow_mut()[0] = zero.clone();

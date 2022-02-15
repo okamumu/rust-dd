@@ -18,6 +18,10 @@ use crate::nodes::{
     NonTerminalMDD,
 };
 
+use crate::dot::{
+    Dot,
+};
+
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     NOT,
@@ -26,11 +30,11 @@ enum Operation {
     XOR,
 }
 
-pub type Node<V> = MDDNode<V>;
+type Node<V> = MddNode<V>;
 
 #[derive(Debug,Clone)]
-pub enum MDDNode<V> {
-    NonTerminal(Rc<NonTerminalMDD<MDDNode<V>>>),
+pub enum MddNode<V> {
+    NonTerminal(Rc<NonTerminalMDD<Node<V>>>),
     Terminal(Rc<TerminalBinary<V>>),
     Default,
 }
@@ -41,7 +45,7 @@ impl<V> Default for Node<V> {
     }
 }
 
-impl<V> PartialEq for MDDNode<V> where V: TerminalBinaryValue {
+impl<V> PartialEq for Node<V> where V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::NonTerminal(x), Self::NonTerminal(y)) => x.id() == y.id(),
@@ -51,15 +55,15 @@ impl<V> PartialEq for MDDNode<V> where V: TerminalBinaryValue {
     }
 }
 
-impl<V> Eq for MDDNode<V> where V: TerminalBinaryValue {}
+impl<V> Eq for Node<V> where V: TerminalBinaryValue {}
 
-impl<V> Hash for MDDNode<V> where V: TerminalBinaryValue {
+impl<V> Hash for Node<V> where V: TerminalBinaryValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<V> MDDNode<V> where V: TerminalBinaryValue {
+impl<V> Node<V> where V: TerminalBinaryValue {
     pub fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Self]) -> Self {
         let x = NonTerminalMDD::new(
             id,
@@ -98,7 +102,7 @@ impl<V> MDDNode<V> where V: TerminalBinaryValue {
 }
 
 #[derive(Debug)]
-pub struct MDD<V = u8> {
+pub struct Mdd<V = u8> {
     num_headers: HeaderId,
     num_nodes: NodeId,
     zero: Node<V>,
@@ -107,7 +111,7 @@ pub struct MDD<V = u8> {
     cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
 }
 
-impl<V> MDD<V> where V: TerminalBinaryValue {
+impl<V> Mdd<V> where V: TerminalBinaryValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
@@ -306,17 +310,12 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
         };
         visited.insert(f.clone());
     }
+}
 
-    pub fn dot<U>(&self, io: &mut U, f: &Node<V>) where U: std::io::Write {
-        let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
-        let s2 = "}\n";
-        let mut visited = HashSet::new();
-        io.write(s1.as_bytes()).unwrap();
-        self.dot_(io, f, &mut visited);
-        io.write(s2.as_bytes()).unwrap();
-    }
+impl<V> Dot for Mdd<V> where V: TerminalBinaryValue {
+    type Node = Node<V>;
 
-    pub fn dot_<U>(&self, io: &mut U, f: &Node<V>, visited: &mut HashSet<Node<V>>) where U: std::io::Write {
+    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
@@ -329,7 +328,7 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    self.dot_(io, x, visited);
+                    self.dot_impl(io, x, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
@@ -340,7 +339,7 @@ impl<V> MDD<V> where V: TerminalBinaryValue {
     }
 }
 
-// impl<V> MDD<V> where V: TerminalBinaryValue {
+// impl<V> Mdd<V> where V: TerminalBinaryValue {
 //     pub fn build_from_pathset<P>(&mut self, headers: &[NodeHeader], pathset: P) {
 //         for x in P {
 //             for i in domain[level] {
@@ -394,7 +393,7 @@ mod tests {
 
     #[test]
     fn new_test1() {
-        let mut dd: MDD = MDD::new();
+        let mut dd: Mdd = Mdd::new();
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = dd.create_node(&h, &vec![dd.zero(), dd.one()]);
         println!("{:?}", x);
@@ -405,7 +404,7 @@ mod tests {
 
     #[test]
     fn new_test2() {
-        let mut dd: MDD = MDD::new();
+        let mut dd: Mdd = Mdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
@@ -419,7 +418,7 @@ mod tests {
     
     #[test]
     fn new_test3() {
-        let mut dd: MDD = MDD::new();
+        let mut dd: Mdd = Mdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
@@ -437,7 +436,7 @@ mod tests {
 
     #[test]
     fn new_test4() {
-        let mut dd: MDD = MDD::new();
+        let mut dd: Mdd = Mdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
@@ -455,7 +454,7 @@ mod tests {
 
     #[test]
     fn new_test5() {
-        let mut dd: MDD = MDD::new();
+        let mut dd: Mdd = Mdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let x = dd.create_node(&h1, &vec![dd.zero(), dd.one()]);
@@ -474,7 +473,7 @@ mod tests {
 
     // #[test]
     // fn test_mdd_pset() {
-    //     let mut dd: MDD = MDD::new();
+    //     let mut dd: Mdd = Mdd::new();
     //     let h1 = NodeHeader::new(0, 0, "x", 2);
     //     let h2 = NodeHeader::new(1, 1, "y", 2);
     //     let pset = vec![

@@ -18,6 +18,10 @@ use crate::nodes::{
     NonTerminalMDD,
 };
 
+use crate::dot::{
+    Dot,
+};
+
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     ADD,
@@ -28,29 +32,29 @@ enum Operation {
     MAX,
 }
 
-pub type Node<V> = MTMDDNode<V>;
+type Node<V> = MtMddNode<V>;
 
 #[derive(Debug,Clone)]
-pub enum MTMDDNode<V> {
-    NonTerminal(Rc<NonTerminalMDD<MTMDDNode<V>>>),
+pub enum MtMddNode<V> {
+    NonTerminal(Rc<NonTerminalMDD<Node<V>>>),
     Terminal(Rc<TerminalNumber<V>>),
 }
 
-impl<V> PartialEq for MTMDDNode<V> where V: TerminalNumberValue {
+impl<V> PartialEq for Node<V> where V: TerminalNumberValue {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
 }
 
-impl<V> Eq for MTMDDNode<V> where V: TerminalNumberValue {}
+impl<V> Eq for Node<V> where V: TerminalNumberValue {}
 
-impl<V> Hash for MTMDDNode<V> where V: TerminalNumberValue {
+impl<V> Hash for Node<V> where V: TerminalNumberValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<V> MTMDDNode<V> where V: TerminalNumberValue {
+impl<V> Node<V> where V: TerminalNumberValue {
     pub fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Self]) -> Self {
         let x = NonTerminalMDD::new(
             id,
@@ -88,7 +92,7 @@ impl<V> MTMDDNode<V> where V: TerminalNumberValue {
 }
 
 #[derive(Debug)]
-pub struct MTMDD<V> {
+pub struct MtMdd<V> {
     num_headers: HeaderId,
     num_nodes: NodeId,
     vtable: HashMap<V,Node<V>>,
@@ -96,7 +100,7 @@ pub struct MTMDD<V> {
     cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
 }
 
-impl<V> MTMDD<V> where V: TerminalNumberValue {
+impl<V> MtMdd<V> where V: TerminalNumberValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
@@ -401,17 +405,12 @@ impl<V> MTMDD<V> where V: TerminalNumberValue {
         };
         visited.insert(f.clone());
     }
+}
 
-    pub fn dot<U>(&self, io: &mut U, f: &Node<V>) where U: std::io::Write {
-        let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
-        let s2 = "}\n";
-        let mut visited = HashSet::new();
-        io.write(s1.as_bytes()).unwrap();
-        self.dot_(io, f, &mut visited);
-        io.write(s2.as_bytes()).unwrap();
-    }
+impl<V> Dot for MtMdd<V> where V: TerminalNumberValue {
+    type Node = Node<V>;
 
-    pub fn dot_<U>(&self, io: &mut U, f: &Node<V>, visited: &mut HashSet<Node<V>>) where U: std::io::Write {
+    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
@@ -424,7 +423,7 @@ impl<V> MTMDD<V> where V: TerminalNumberValue {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    self.dot_(io, x, visited);
+                    self.dot_impl(io, x, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
@@ -478,7 +477,7 @@ mod tests {
 
     #[test]
     fn new_test1() {
-        let mut dd = MTMDD::new();
+        let mut dd = MtMdd::new();
         let h = NodeHeader::new(0, 0, "x", 2);
         let v = vec![dd.value(0), dd.value(1)];
         let x = dd.create_node(&h, &v);
@@ -490,7 +489,7 @@ mod tests {
 
     #[test]
     fn new_test2() {
-        let mut dd = MTMDD::new();
+        let mut dd = MtMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let v = vec![dd.value(0), dd.value(1)];
@@ -505,7 +504,7 @@ mod tests {
     
     #[test]
     fn new_test3() {
-        let mut dd = MTMDD::new();
+        let mut dd = MtMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let v = vec![dd.value(0), dd.value(1)];
@@ -524,7 +523,7 @@ mod tests {
 
     #[test]
     fn new_test4() {
-        let mut dd = MTMDD::new();
+        let mut dd = MtMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
         let v = vec![dd.value(0), dd.value(1)];

@@ -1,5 +1,6 @@
 pub mod common;
 pub mod nodes;
+pub mod dot;
 
 pub mod bdd;
 pub mod zdd;
@@ -9,5 +10,6 @@ pub mod evplus_mdd;
 
 // sample for BDD with NodeId
 // pub mod bdd2;
+
 // sample for BDD with RefCell
-// pub mod bdd3;
+pub mod bdd3;

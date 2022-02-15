@@ -25,7 +25,7 @@ pub trait Terminal {
 
 /// The trait for non-terminal node.
 pub trait NonTerminal : Index<usize> + IndexMut<usize> {
-    type Node;
+        type Node;
     fn id(&self) -> NodeId;
     fn header(&self) -> &NodeHeader;
     fn level(&self) -> Level;

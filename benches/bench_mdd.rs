@@ -7,10 +7,13 @@ use dd::nodes::{
     NodeHeader,
 };
 use dd::mdd::*;
+use dd::dot::Dot;
+
+type Node<V> = MddNode<V>;
 
 fn bench_mdd1 () {
     let n = 1000;
-    let mut f: MDD = MDD::new();
+    let mut f: Mdd = Mdd::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
@@ -31,7 +34,7 @@ fn bench_mdd1 () {
 
 fn bench_mdd2 () {
     let n = 1000;
-    let mut f: MDD = MDD::new();
+    let mut f: Mdd = Mdd::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
@@ -64,7 +67,7 @@ fn bench_mdd3 () {
         vec![1, 0, 1],
     ];
 
-    let mut f: MDD = MDD::new();
+    let mut f: Mdd = Mdd::new();
     let one = f.one();
     let zero = f.zero();
     let h1 = f.header(1, "x1", 3);
@@ -74,7 +77,7 @@ fn bench_mdd3 () {
     // creat_mdd_node(&mut f, &vec![h1,h2,h3], &data);
 }
 
-// fn creat_mdd_node<V,T>(dd: &mut MDD<V>, headers: &[NodeHeader], data: &[Vec<T>]) where T: Clone+PartialEq+Eq+Hash+std::fmt::Debug, V: TerminalBinaryValue {
+// fn creat_mdd_node<V,T>(dd: &mut Mdd<V>, headers: &[NodeHeader], data: &[Vec<T>]) where T: Clone+PartialEq+Eq+Hash+std::fmt::Debug, V: TerminalBinaryValue {
 //     let mut id = 0;
 //     let mut table: HashMap<Vec<T>,i32> = HashMap::new();
 //     let max_level = headers.len();

@@ -26,16 +26,16 @@ enum Operation {
     XOR,
 }
 
-type Node<V> = BDD2Node<V>;
+type Node<V> = BddNode<V>;
 
 #[derive(Debug)]
-pub enum BDD2Node<V> {
+pub enum BddNode<V> {
     NonTerminal(NonTerminalBDD<NodeId>),
     Terminal(TerminalBinary<V>),
     None,
 }
 
-impl<V> PartialEq for BDD2Node<V> where V: TerminalBinaryValue {
+impl<V> PartialEq for Node<V> where V: TerminalBinaryValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Node::NonTerminal(x), Node::NonTerminal(y)) => x.id() == y.id(),
@@ -45,15 +45,15 @@ impl<V> PartialEq for BDD2Node<V> where V: TerminalBinaryValue {
     }
 }
 
-impl<V> Eq for BDD2Node<V> where V: TerminalBinaryValue {}
+impl<V> Eq for Node<V> where V: TerminalBinaryValue {}
 
-impl<V> Hash for BDD2Node<V> where V: TerminalBinaryValue {
+impl<V> Hash for Node<V> where V: TerminalBinaryValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<V> BDD2Node<V> where V: TerminalBinaryValue {
+impl<V> Node<V> where V: TerminalBinaryValue {
     pub fn new_nonterminal(id: NodeId, header: &NodeHeader, low: NodeId, high: NodeId) -> Self {
         let x = NonTerminalBDD::new(id, header.clone(), [low, high]);
         Self::NonTerminal(x)
@@ -88,7 +88,7 @@ impl<V> BDD2Node<V> where V: TerminalBinaryValue {
 }
 
 #[derive(Debug)]
-pub struct BDD2<V=u8> {
+pub struct Bdd<V=u8> {
     num_headers: HeaderId,
     num_nodes: NodeId,
     nodes: Vec<Node<V>>,
@@ -98,7 +98,7 @@ pub struct BDD2<V=u8> {
     cache: HashMap<(Operation, NodeId, NodeId), NodeId>,
 }
 
-impl<V> BDD2<V> where V: TerminalBinaryValue {
+impl<V> Bdd<V> where V: TerminalBinaryValue {
     pub fn new() -> Self {
         Self {
             num_headers: 0,

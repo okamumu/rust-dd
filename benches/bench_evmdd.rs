@@ -1,18 +1,21 @@
 use dd::common::*;
 use dd::nodes::*;
 use dd::evplus_mdd::{
-    EVMDD,
-    Node,
+    EvMdd,
+    EvMddNode,
 };
+use dd::dot::Dot;
 
-pub fn table<T,U>(dd: &EVMDD<T,U>, fv: T, f: &Node<T,U>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue, U: TerminalBinaryValue {
+type Node<E,V> = EvMddNode<E,V>;
+
+pub fn table<T,U>(dd: &EvMdd<T,U>, fv: T, f: &Node<T,U>) -> Vec<(Vec<usize>,Option<T>)> where T: EdgeValue, U: TerminalBinaryValue {
     let mut tab = Vec::new();
     let p = Vec::new();
     table_(dd, f, &p, &mut tab, fv);
     tab
 }
 
-pub fn table_<T,U>(dd: &EVMDD<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue, U: TerminalBinaryValue {
+pub fn table_<T,U>(dd: &EvMdd<T,U>, f: &Node<T,U>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<T>)>, s: T) where T: EdgeValue, U: TerminalBinaryValue {
     match f {
         Node::Terminal(_) if f == &dd.infinity() => {
             tab.push((path.to_vec(), None));

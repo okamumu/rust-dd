@@ -1,8 +1,11 @@
 use dd::mtmdd::*;
+use dd::dot::Dot;
+
+type Node<V> = MtMddNode<V>;
 
 fn bench_mtmdd1 () {
     let n = 100;
-    let mut f: MTMDD<i64> = MTMDD::new();
+    let mut f: MtMdd<i64> = MtMdd::new();
     let h1 = f.header(1, "y1", 2);
     let h2 = f.header(2, "y2", 2);
     let h3 = f.header(3, "y3", 2);
