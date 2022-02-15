@@ -1,8 +1,6 @@
 use dd::mtmdd::*;
 use dd::dot::Dot;
 
-type Node<V> = MtMddNode<V>;
-
 fn bench_mtmdd1 () {
     let n = 100;
     let mut f: MtMdd<i64> = MtMdd::new();

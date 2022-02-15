@@ -3,7 +3,9 @@ use dd::nodes::*;
 use dd::bdd::*;
 // use dd::dot::*;
 
-type Node<V> = BddNode<V>;
+use dd::bdd_mut::*;
+
+type Node = BddNode;
 
 fn clock<F>(s: &str, f: F) where F: FnOnce() {
     let start = std::time::Instant::now();
@@ -42,24 +44,24 @@ impl Print for Vec<(Vec<Binary>,Binary)> {
     }
 }
 
-fn table<T>(dd: &Bdd<T>, f: &Node<T>) -> Vec<(Vec<Binary>,Binary)> where T: TerminalBinaryValue {
+fn table(dd: &Bdd, f: &Node) -> Vec<(Vec<Binary>,Binary)> {
     let mut tab = Vec::new();
     let p = Vec::new();
     table_impl(dd, f.level().unwrap()+1, f, &p, &mut tab);
     tab
 }
 
-fn table_impl<T>(dd: &Bdd<T>, level: Level, f: &Node<T>,
-        path: &[Binary], tab: &mut Vec<(Vec<Binary>,Binary)>) where T: TerminalBinaryValue {
+fn table_impl(dd: &Bdd, level: Level, f: &Node,
+        path: &[Binary], tab: &mut Vec<(Vec<Binary>,Binary)>) {
     match f {
-        Node::Terminal(fnode) if fnode.value() == T::low() => {
+        Node::Zero => {
             let mut p = path.to_vec();
             for _ in 0..level {
                 p.push(Binary::Undet);
             }
             tab.push((p,Binary::Zero));
         },
-        Node::Terminal(fnode) if fnode.value() == T::high() => {
+        Node::One => {
             let mut p = path.to_vec();
             for _ in 0..level {
                 p.push(Binary::Undet);

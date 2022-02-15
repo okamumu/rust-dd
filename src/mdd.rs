@@ -7,14 +7,12 @@ use crate::common::{
     Level,
     HashMap,
     HashSet,
-    TerminalBinaryValue,
 };
 
 use crate::nodes::{
     NodeHeader,
     Terminal,
     NonTerminal,
-    TerminalBinary,
     NonTerminalMDD,
 };
 
@@ -30,40 +28,35 @@ enum Operation {
     XOR,
 }
 
-type Node<V> = MddNode<V>;
+type Node = MddNode;
 
 #[derive(Debug,Clone)]
-pub enum MddNode<V> {
-    NonTerminal(Rc<NonTerminalMDD<Node<V>>>),
-    Terminal(Rc<TerminalBinary<V>>),
-    Default,
+pub enum MddNode {
+    NonTerminal(Rc<NonTerminalMDD<Node>>),
+    Zero,
+    One,
 }
 
-impl<V> Default for Node<V> {
-    fn default() -> Self {
-        Self::Default
-    }
-}
-
-impl<V> PartialEq for Node<V> where V: TerminalBinaryValue {
+impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::NonTerminal(x), Self::NonTerminal(y)) => x.id() == y.id(),
-            (Self::Terminal(x), Self::Terminal(y)) => x.value() == y.value(),
+            (Self::Zero, Self::Zero) => true,
+            (Self::One, Self::One) => true,
             _ => false
         }
     }
 }
 
-impl<V> Eq for Node<V> where V: TerminalBinaryValue {}
+impl Eq for Node {}
 
-impl<V> Hash for Node<V> where V: TerminalBinaryValue {
+impl Hash for Node {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id().hash(state);
     }
 }
 
-impl<V> Node<V> where V: TerminalBinaryValue {
+impl Node {
     pub fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Self]) -> Self {
         let x = NonTerminalMDD::new(
             id,
@@ -72,17 +65,12 @@ impl<V> Node<V> where V: TerminalBinaryValue {
         );
         Self::NonTerminal(Rc::new(x))
     }
-
-    pub fn new_terminal(id: NodeId, value: V) -> Self {
-        let x = TerminalBinary::new(id, value);
-        Self::Terminal(Rc::new(x))
-    }
     
     pub fn id(&self) -> NodeId {
         match self {
             Self::NonTerminal(x) => x.id(),
-            Self::Terminal(x) => x.id(),
-            _ => 0,
+            Self::Zero => 0,
+            Self::One => 1,
         }        
     }
 
@@ -102,22 +90,22 @@ impl<V> Node<V> where V: TerminalBinaryValue {
 }
 
 #[derive(Debug)]
-pub struct Mdd<V = u8> {
+pub struct Mdd {
     num_headers: HeaderId,
     num_nodes: NodeId,
-    zero: Node<V>,
-    one: Node<V>,
-    utable: HashMap<(HeaderId, Box<[NodeId]>), Node<V>>,
-    cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
+    zero: Node,
+    one: Node,
+    utable: HashMap<(HeaderId, Box<[NodeId]>), Node>,
+    cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
 
-impl<V> Mdd<V> where V: TerminalBinaryValue {
+impl Mdd {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
             num_nodes: 2,
-            zero: Node::new_terminal(0, V::low()),
-            one: Node::new_terminal(1, V::high()),
+            zero: Node::Zero,
+            one: Node::One,
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
@@ -133,7 +121,7 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node<V>]) -> Result<Node<V>,String> {
+    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
         if h.edge_num() == nodes.len() {
             Ok(self.create_node(h, nodes))
         } else {
@@ -141,7 +129,7 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    fn create_node(&mut self, h: &NodeHeader, nodes: &[Node<V>]) -> Node<V> {
+    fn create_node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Node {
         if nodes.iter().all(|x| &nodes[0] == x) {
             return nodes[0].clone()
         }
@@ -158,22 +146,22 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         }
     }
     
-    pub fn zero(&self) -> Node<V> {
+    pub fn zero(&self) -> Node {
         self.zero.clone()
     }
     
-    pub fn one(&self) -> Node<V> {
+    pub fn one(&self) -> Node {
         self.one.clone()
     }
 
-    pub fn not(&mut self, f: &Node<V>) -> Node<V> {
+    pub fn not(&mut self, f: &Node) -> Node {
         let key = (Operation::NOT, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match f {
-                    Node::Terminal(fnode) if fnode.value() == V::low() => self.one(),
-                    Node::Terminal(fnode) if fnode.value() == V::high() => self.zero(),
+                    Node::Zero => self.one(),
+                    Node::One => self.zero(),
                     Node::NonTerminal(fnode) => {
                         let nodes = fnode.iter().map(|f| self.not(f)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
@@ -186,7 +174,7 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    pub fn and(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn and(&mut self, f: &Node, g: &Node) -> Node {
         // if f == g {
         //     return f.clone()
         // }
@@ -195,10 +183,10 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => self.zero(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => g.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => self.zero(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => f.clone(),
+                    (Node::Zero, _) => self.zero(),
+                    (Node::One, _) => g.clone(),
+                    (_, Node::Zero) => self.zero(),
+                    (_, Node::One) => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let nodes = fnode.iter().map(|f| self.and(f, g)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
@@ -219,7 +207,7 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         }
     }
     
-    pub fn or(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn or(&mut self, f: &Node, g: &Node) -> Node {
         // if f == g {
         //     return f.clone()
         // }
@@ -228,10 +216,10 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => self.one(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => self.one(),
+                    (Node::Zero, _) => g.clone(),
+                    (Node::One, _) => self.one(),
+                    (_, Node::Zero) => f.clone(),
+                    (_, Node::One) => self.one(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let nodes = fnode.iter().map(|f| self.or(f, g)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
@@ -252,16 +240,16 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    pub fn xor(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn xor(&mut self, f: &Node, g: &Node) -> Node {
         let key = (Operation::XOR, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => self.not(g),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => self.not(f),
+                    (Node::Zero, _) => g.clone(),
+                    (Node::One, _) => self.not(g),
+                    (_, Node::Zero) => f.clone(),
+                    (_, Node::One) => self.not(f),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let nodes = fnode.iter().map(|f| self.xor(f, g)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
@@ -286,7 +274,7 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         self.cache.clear();
     }
     
-    pub fn rebuild(&mut self, fs: &[Node<V>]) {
+    pub fn rebuild(&mut self, fs: &[Node]) {
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
@@ -294,7 +282,7 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    fn rebuild_table(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
+    fn rebuild_table(&mut self, f: &Node, visited: &mut HashSet<Node>) {
         if visited.contains(f) {
             return
         }
@@ -312,16 +300,20 @@ impl<V> Mdd<V> where V: TerminalBinaryValue {
     }
 }
 
-impl<V> Dot for Mdd<V> where V: TerminalBinaryValue {
-    type Node = Node<V>;
+impl Dot for Mdd {
+    type Node = Node;
 
     fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
         match f {
-            Node::Terminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
+            Node::Zero => {
+                let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", f.id());
+                io.write(s.as_bytes()).unwrap();
+            },
+            Node::One => {
+                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", f.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
@@ -339,7 +331,7 @@ impl<V> Dot for Mdd<V> where V: TerminalBinaryValue {
     }
 }
 
-// impl<V> Mdd<V> where V: TerminalBinaryValue {
+// impl Mdd {
 //     pub fn build_from_pathset<P>(&mut self, headers: &[NodeHeader], pathset: P) {
 //         for x in P {
 //             for i in domain[level] {
@@ -372,16 +364,16 @@ mod tests {
 
     #[test]
     fn new_terminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero = Node::Zero;
+        let one = Node::One;
         println!("{:?}", zero);
         println!("{:?}", one);
     }
 
     #[test]
     fn new_nonterminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero = Node::Zero;
+        let one = Node::One;
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = Node::new_nonterminal(3, &h, &vec![zero, one]);
         println!("{:?}", x);

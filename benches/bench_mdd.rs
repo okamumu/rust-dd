@@ -9,7 +9,12 @@ use dd::nodes::{
 use dd::mdd::*;
 use dd::dot::Dot;
 
-type Node<V> = MddNode<V>;
+fn clock<F>(s: &str, f: F) where F: FnOnce() {
+    let start = std::time::Instant::now();
+    f();
+    let end = start.elapsed();
+    println!("{}: time {}", s, end.as_secs_f64());
+}
 
 fn bench_mdd1 () {
     let n = 1000;
@@ -20,15 +25,12 @@ fn bench_mdd1 () {
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i), 5)).collect::<Vec<_>>();
         let x = (0..n).into_iter().map(|i| f.node(&h[i], &v).unwrap()).collect::<Vec<_>>();
     
-        let start = std::time::Instant::now();
-    
-        for i in x.into_iter() {
-            b = f.and(&b, &i);
-        }
-    
-        let end = start.elapsed();
-        println!("mdd3 node {:?}", f.size());
-        println!("mdd3 {} sec", end.as_secs_f64());
+        clock("-bench mdd1-1", ||{
+            for i in x.into_iter() {
+                b = f.and(&b, &i);
+            }
+        });
+        println!("-mdd3 node {:?}", f.size());
     }
 }
 
@@ -41,23 +43,19 @@ fn bench_mdd2 () {
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i), 5)).collect::<Vec<_>>();
         let x = (0..n).into_iter().map(|i| f.node(&h[i], &v).unwrap()).collect::<Vec<_>>();
     
-        let start = std::time::Instant::now();
-    
-        for i in (0..n).rev() {
-            b = f.and(&b, &x[i]);
-        }
-    
-        let end = start.elapsed();
-        println!("mdd3 node {:?}", f.size());
-        println!("mdd3 rev {} sec", end.as_secs_f64());
+        clock("-bench mdd2", ||{
+            for i in (0..n).rev() {
+                b = f.and(&b, &x[i]);
+            }
+        });
+        println!("-mdd3 node {:?}", f.size());
     }
     {
-        let start = std::time::Instant::now();
-        f.clear();
-        f.rebuild(&vec![b]);
-        let end = start.elapsed();
-        println!("mdd3 node {:?}", f.size());
-        println!("mdd3 clear {} sec", end.as_secs_f64());
+        clock("-bench mdd2", ||{
+            f.clear();
+            f.rebuild(&vec![b]);
+        });
+        println!("-mdd3 node {:?}", f.size());
     }
 }
 
@@ -104,7 +102,7 @@ fn bench_mdd3 () {
 // }
 
 fn main() {
-    bench_mdd1();
-    bench_mdd2();
-    bench_mdd3();
+    clock("bench mdd1", bench_mdd1);
+    clock("bench_mdd2", bench_mdd2);
+    clock("bench mdd3", bench_mdd3);
 }

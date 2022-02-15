@@ -4,7 +4,6 @@ use crate::common::{
     HeaderId,
     NodeId,
     Level,
-    TerminalBinaryValue,
     HashSet,
     HashMap,
 };
@@ -32,26 +31,26 @@ enum Operation {
     PRODUCT,
 }
 
-pub type ZddNode<V> = BddNode<V>;
-type Node<V> = BddNode<V>;
+pub type ZddNode = BddNode;
+type Node = BddNode;
 
 #[derive(Debug)]
-pub struct Zdd<V=u8> {
+pub struct Zdd {
     num_headers: HeaderId,
     num_nodes: NodeId,
-    zero: Node<V>,
-    one: Node<V>,
-    utable: HashMap<(HeaderId, NodeId, NodeId), Node<V>>,
-    cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
+    zero: Node,
+    one: Node,
+    utable: HashMap<(HeaderId, NodeId, NodeId), Node>,
+    cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
 
-impl<V> Zdd<V> where V: TerminalBinaryValue {
+impl Zdd {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
             num_nodes: 2,
-            zero: Node::new_terminal(0, V::low()),
-            one: Node::new_terminal(1, V::high()),
+            zero: Node::Zero,
+            one: Node::One,
             utable: HashMap::new(),
             cache: HashMap::new(),
         }
@@ -67,7 +66,7 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node<V>]) -> Result<Node<V>,String> {
+    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
         if nodes.len() == h.edge_num() {
             Ok(self.create_node(h, &nodes[0], &nodes[1]))
         } else {
@@ -75,7 +74,7 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node<V>, high: &Node<V>) -> Node<V> {
+    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if high == &self.zero {
             return low.clone()
         }
@@ -92,22 +91,22 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
     
-    pub fn zero(&self) -> Node<V> {
+    pub fn zero(&self) -> Node {
         self.zero.clone()
     }
     
-    pub fn one(&self) -> Node<V> {
+    pub fn one(&self) -> Node {
         self.one.clone()
     }
 
-    pub fn not(&mut self, f: &Node<V>) -> Node<V> {
+    pub fn not(&mut self, f: &Node) -> Node {
         let key = (Operation::NOT, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match f {
-                    Node::Terminal(fnode) if fnode.value() == V::low() => self.one(),
-                    Node::Terminal(fnode) if fnode.value() == V::high() => self.zero(),
+                    Node::Zero => self.one(),
+                    Node::One => self.zero(),
                     Node::NonTerminal(fnode) => {
                         let low = self.not(&fnode[0]);
                         let high = self.not(&fnode[1]);
@@ -121,16 +120,16 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    pub fn intersect(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn intersect(&mut self, f: &Node, g: &Node) -> Node {
         let key = (Operation::INTERSECT, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => self.zero(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => g.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => self.zero(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => f.clone(),
+                    (Node::Zero, _) => self.zero(),
+                    (Node::One, _) => g.clone(),
+                    (_, Node::Zero) => self.zero(),
+                    (_, Node::One) => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.intersect(&fnode[0], g);
                         let high = self.intersect(&fnode[1], &self.zero());
@@ -154,16 +153,16 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
     
-    pub fn union(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn union(&mut self, f: &Node, g: &Node) -> Node {
         let key = (Operation::UNION, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => self.one(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => self.one(),
+                    (Node::Zero, _) => g.clone(),
+                    (Node::One, _) => self.one(),
+                    (_, Node::Zero) => f.clone(),
+                    (_, Node::One) => self.one(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.union(&fnode[0], g);
                         let high = self.union(&fnode[1], &self.zero());
@@ -187,16 +186,16 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    pub fn setdiff(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn setdiff(&mut self, f: &Node, g: &Node) -> Node {
         let key = (Operation::SETDIFF, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => g.clone(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => self.not(g),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => f.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => self.not(f),
+                    (Node::Zero, _) => g.clone(),
+                    (Node::One, _) => self.not(g),
+                    (_, Node::Zero) => f.clone(),
+                    (_, Node::One) => self.not(f),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.setdiff(&fnode[0], g);
                         let high = self.setdiff(&fnode[1], &self.zero());
@@ -220,16 +219,16 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    pub fn product(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn product(&mut self, f: &Node, g: &Node) -> Node {
         let key = (Operation::PRODUCT, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
                 let node = match (f, g) {
-                    (Node::Terminal(fnode), _) if fnode.value() == V::low() => self.zero(),
-                    (Node::Terminal(fnode), _) if fnode.value() == V::high() => g.clone(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::low() => self.zero(),
-                    (_, Node::Terminal(gnode)) if gnode.value() == V::high() => f.clone(),
+                    (Node::Zero, _) => self.zero(),
+                    (Node::One, _) => g.clone(),
+                    (_, Node::Zero) => self.zero(),
+                    (_, Node::One) => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.product(&fnode[0], g);
                         let high = self.product(&fnode[1], g);
@@ -257,7 +256,7 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         self.cache.clear();
     }
     
-    pub fn rebuild(&mut self, fs: &[Node<V>]) {
+    pub fn rebuild(&mut self, fs: &[Node]) {
         self.utable.clear();
         let mut visited = HashSet::new();
         for x in fs.iter() {
@@ -265,7 +264,7 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    fn rebuild_table(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
+    fn rebuild_table(&mut self, f: &Node, visited: &mut HashSet<Node>) {
         if visited.contains(f) {
             return
         }
@@ -283,27 +282,30 @@ impl<V> Zdd<V> where V: TerminalBinaryValue {
     }
 }
 
-impl<V> Dot for Zdd<V> where V: TerminalBinaryValue {
-    type Node = Node<V>;
+impl Dot for Zdd {
+    type Node = Node;
 
     fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
         if visited.contains(f) {
             return
         }
         match f {
-            Node::Terminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
+            Node::One => {
+                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", f.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    self.dot_impl(io, x, visited);
-                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
-                    io.write(s.as_bytes()).unwrap();
+                    if let Node::One | Node::NonTerminal(_) = x {
+                        self.dot_impl(io, x, visited);
+                        let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
+                        io.write(s.as_bytes()).unwrap();
+                    }
                 }
             },
+            _ => (),
         };
         visited.insert(f.clone());
     }
@@ -315,9 +317,9 @@ mod tests {
     use std::io::BufWriter;
     use std::rc::Rc;
 
-    // impl Drop for Node<V> {
+    // impl Drop for Node {
     //     fn drop(&mut self) {
-    //         println!("Dropping Node<V>{}", self.id());
+    //         println!("Dropping Node{}", self.id());
     //     }
     // }
 
@@ -333,16 +335,16 @@ mod tests {
 
     #[test]
     fn new_terminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero = Node::Zero;
+        let one = Node::One;
         println!("{:?}", zero);
         println!("{:?}", one);
     }
 
     #[test]
     fn new_nonterminal() {
-        let zero = Node::new_terminal(0, false);
-        let one = Node::new_terminal(1, true);
+        let zero = Node::Zero;
+        let one = Node::One;
         let h = NodeHeader::new(0, 0, "x", 2);
         let x = Node::new_nonterminal(3, &h, &zero, &one);
         println!("{:?}", x);
