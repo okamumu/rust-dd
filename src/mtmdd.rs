@@ -19,7 +19,7 @@ use crate::nodes::{
 };
 
 use crate::dot::{
-    DotNode,
+    Dot,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -407,7 +407,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
 }
 
-impl<V> DotNode for Node<V> where V: TerminalNumberValue {
+impl<V> Dot for Node<V> where V: TerminalNumberValue {
     type Node = Node<V>;
 
     fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
@@ -541,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dotnode() {
+    fn test_dot() {
         let mut dd = MtMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);

@@ -16,7 +16,7 @@ use crate::nodes::{
 };
 
 use crate::dot::{
-    DotNode,
+    Dot,
 };
 
 use crate::zdd_mut::{

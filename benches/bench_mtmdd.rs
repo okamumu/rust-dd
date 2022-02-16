@@ -1,5 +1,5 @@
 use dd::mtmdd::*;
-use dd::dot::DotNode;
+use dd::dot::Dot;
 
 fn bench_mtmdd1 () {
     let n = 100;

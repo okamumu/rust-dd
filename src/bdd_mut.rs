@@ -18,7 +18,7 @@ use crate::nodes::{
 };
 
 use crate::dot::{
-    DotNode,
+    Dot,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -309,7 +309,7 @@ impl BddMut {
     }
 }
 
-impl DotNode for Node {
+impl Dot for Node {
     type Node = Node;
 
     fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
@@ -385,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dotnode() {
+    fn test_dot() {
         let mut dd = BddMut::new();
         let h1 = dd.header(0, "x");
         let h2 = dd.header(1, "y");

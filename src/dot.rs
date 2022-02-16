@@ -2,7 +2,7 @@ use crate::common::{
     HashSet,
 };
 
-pub trait DotNode {
+pub trait Dot {
     type Node;
 
     fn dot<T>(&self, io: &mut T) where T: std::io::Write {

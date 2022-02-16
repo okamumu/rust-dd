@@ -19,7 +19,7 @@ use crate::nodes::{
 };
 
 use crate::dot::{
-    DotNode,
+    Dot,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -315,7 +315,7 @@ impl<E> EvMdd<E> where E: EdgeValue {
     }
 }
 
-impl<E> DotNode for Node<E> where E: EdgeValue {
+impl<E> Dot for Node<E> where E: EdgeValue {
     type Node = Node<E>;
     
     fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
@@ -348,7 +348,7 @@ impl<E> DotNode for Node<E> where E: EdgeValue {
     }
 }
 
-impl<E> DotNode for Edge<E> where E: EdgeValue {
+impl<E> Dot for Edge<E> where E: EdgeValue {
     type Node = Node<E>;
     
     fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
@@ -663,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dotnode() {
+    fn test_dot() {
         let mut dd: EvMdd = EvMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);

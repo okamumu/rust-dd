@@ -6,7 +6,7 @@ use dd::nodes::{
     NodeHeader,
 };
 use dd::mdd::*;
-use dd::dot::DotNode;
+use dd::dot::Dot;
 
 fn clock<F>(s: &str, f: F) where F: FnOnce() {
     let start = std::time::Instant::now();
