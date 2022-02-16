@@ -10,7 +10,7 @@ use crate::common::{
 };
 
 use crate::dot::{
-    Dot,
+    DotNode,
 };
 
 use crate::nodes::{
@@ -163,7 +163,6 @@ impl Bdd {
                         let high = self.not(&fnode[1]);
                         self.create_node(fnode.header(), &low, &high)
                     },
-                    _ => panic!("error"),
                 };
                 self.cache.insert(key, node.clone());
                 node
@@ -305,33 +304,33 @@ impl Bdd {
     }
 }
 
-impl Dot for Bdd {
+impl DotNode for Node {
     type Node = Node;
 
-    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
-        if visited.contains(f) {
+    fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+        if visited.contains(self) {
             return
         }
-        match f {
+        match self {
             Node::Zero => {
-                let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", f.id());
+                let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", self.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::One => {
-                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", f.id());
+                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    self.dot_impl(io, x, visited);
+                    x.dot_impl(io, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
             },
         };
-        visited.insert(f.clone());
+        visited.insert(self.clone());
     }
 }
 
@@ -415,7 +414,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z);
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -434,7 +433,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z);
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -454,7 +453,27 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z);
+            z.dot(&mut io);
+        }
+        let s = std::str::from_utf8(&buf).unwrap();
+        println!("{}", s);
+
+    }
+
+    #[test]
+    fn test_dotnode() {
+        let mut dd: Bdd = Bdd::new();
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
+        let z = dd.or(&x, &y);
+        let z = dd.not(&z);
+
+        let mut buf = vec![];
+        {
+            let mut io = BufWriter::new(&mut buf);
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);

@@ -1,4 +1,5 @@
-use std::hash::Hash;
+use std::rc::Rc;
+use std::hash::{Hash, Hasher};
 
 use crate::common::{
     HeaderId,
@@ -12,14 +13,11 @@ use crate::nodes::{
     NodeHeader,
     Terminal,
     NonTerminal,
+    NonTerminalBDD,
 };
 
 use crate::dot::{
-    Dot,
-};
-
-use crate::bdd::{
-    BddNode,
+    DotNode,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -31,8 +29,62 @@ enum Operation {
     PRODUCT,
 }
 
-pub type ZddNode = BddNode;
-type Node = BddNode;
+type Node = ZddNode;
+
+#[derive(Debug,Clone)]
+pub enum ZddNode {
+    NonTerminal(Rc<NonTerminalBDD<Node>>),
+    Zero,
+    One,
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Node::NonTerminal(x), Node::NonTerminal(y)) => x.id() == y.id(),
+            (Node::Zero, Node::Zero) => true,
+            (Node::One, Node::One) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Node {}
+
+impl Hash for Node {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
+    }
+}
+
+impl Node {
+    pub fn new_nonterminal(id: NodeId, header: &NodeHeader, low: &Self, high: &Self) -> Self {
+        let x = NonTerminalBDD::new(id, header.clone(), [low.clone(), high.clone()]);
+        Self::NonTerminal(Rc::new(x))
+    }
+
+    pub fn id(&self) -> NodeId {
+        match self {
+            Self::NonTerminal(x) => x.id(),
+            Self::Zero => 0,
+            Self::One => 1,
+        }        
+    }
+
+    pub fn header(&self) -> Option<&NodeHeader> {
+        match self {
+            Self::NonTerminal(x) => Some(x.header()),
+            _ => None
+        }
+    }
+
+    pub fn level(&self) -> Option<Level> {
+        match self {
+            Self::NonTerminal(x) => Some(x.level()),
+            _ => None
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Zdd {
@@ -112,7 +164,6 @@ impl Zdd {
                         let high = self.not(&fnode[1]);
                         self.create_node(fnode.header(), &low, &high)
                     },
-                    _ => panic!("error"),
                 };
                 self.cache.insert(key, node.clone());
                 node
@@ -282,16 +333,16 @@ impl Zdd {
     }
 }
 
-impl Dot for Zdd {
+impl DotNode for Node {
     type Node = Node;
 
-    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
-        if visited.contains(f) {
+    fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+        if visited.contains(self) {
             return
         }
-        match f {
+        match self {
             Node::One => {
-                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", f.id());
+                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
@@ -299,7 +350,7 @@ impl Dot for Zdd {
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
                     if let Node::One | Node::NonTerminal(_) = x {
-                        self.dot_impl(io, x, visited);
+                        x.dot_impl(io, visited);
                         let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
                         io.write(s.as_bytes()).unwrap();
                     }
@@ -307,7 +358,7 @@ impl Dot for Zdd {
             },
             _ => (),
         };
-        visited.insert(f.clone());
+        visited.insert(self.clone());
     }
 }
 
@@ -391,7 +442,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z);
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -410,11 +461,29 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z);
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
     }
 
+    #[test]
+    fn test_dotnode() {
+        let mut dd: Zdd = Zdd::new();
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
+        let z = dd.union(&x, &y);
+
+        let mut buf = vec![];
+        {
+            let mut io = BufWriter::new(&mut buf);
+            z.dot(&mut io);
+        }
+        let s = std::str::from_utf8(&buf).unwrap();
+        println!("{}", s);
+
+    }
 }

@@ -18,7 +18,7 @@ use crate::nodes::{
 };
 
 use crate::dot::{
-    Dot,
+    DotNode,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -29,7 +29,7 @@ enum Operation {
     XOR,
 }
 
-pub type Node = BddMutNode;
+type Node = BddMutNode;
 
 #[derive(Debug,Clone)]
 pub enum BddMutNode {
@@ -69,7 +69,7 @@ impl Node {
             Self::NonTerminal(x) => x.borrow().id(),
             Self::Zero => 0,
             Self::One => 1,
-            _ => panic!(),
+            _ => panic!("Did not get NodeId."),
         }        
     }
 
@@ -309,41 +309,41 @@ impl BddMut {
     }
 }
 
-impl Dot for BddMut {
+impl DotNode for Node {
     type Node = Node;
 
-    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
-        if visited.contains(f) {
+    fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+        if visited.contains(self) {
             return
         }
-        match f {
+        match self {
             Node::Zero => {
-                let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", f.id());
+                let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", self.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::One => {
-                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", f.id());
+                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
                 io.write(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.borrow().id(), fnode.borrow().label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.borrow().iter().enumerate() {
-                    self.dot_impl(io, x, visited);
+                    x.dot_impl(io, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.borrow().id(), x.id(), i);
                     io.write(s.as_bytes()).unwrap();
                 }
             },
             _ => (),
         };
-        visited.insert(f.clone());
+        visited.insert(self.clone());
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use std::io::BufWriter;
+    use std::io::BufWriter;
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
@@ -384,4 +384,23 @@ mod tests {
         println!("{:?}", x);
     }
 
+    #[test]
+    fn test_dotnode() {
+        let mut dd = BddMut::new();
+        let h1 = dd.header(0, "x");
+        let h2 = dd.header(1, "y");
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
+        let z = dd.or(&x, &y);
+        let z = dd.not(&z);
+
+        let mut buf = vec![];
+        {
+            let mut io = BufWriter::new(&mut buf);
+            z.dot(&mut io);
+        }
+        let s = std::str::from_utf8(&buf).unwrap();
+        println!("{}", s);
+
+    }
 }

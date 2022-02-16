@@ -19,7 +19,7 @@ use crate::nodes::{
 };
 
 use crate::dot::{
-    Dot,
+    DotNode,
 };
 
 #[derive(Debug,PartialEq,Eq,Hash)]
@@ -315,10 +315,44 @@ impl<E> EvMdd<E> where E: EdgeValue {
     }
 }
 
-impl<E> Dot for EvMdd<E> where E: EdgeValue {
+impl<E> DotNode for Node<E> where E: EdgeValue {
     type Node = Node<E>;
     
-    fn dot_impl<T>(&self, io: &mut T, f: &Self::Node, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+    fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+        if visited.contains(self) {
+            return
+        }
+        match self {
+            Node::Omega => {
+                let s = format!("\"obj{}\" [shape=square, label=\"Omega\"];\n", self.id());
+                io.write(s.as_bytes()).unwrap();
+            },
+            Node::NonTerminal(fnode) => {
+                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
+                io.write(s.as_bytes()).unwrap();
+                for (i,e) in fnode.iter().enumerate() {
+                    e.node().dot_impl(io, visited);
+                    if let Node::Omega | Node::NonTerminal(_) = e.node() {
+                        let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id(), e.node().id(), e.value(), e.value());
+                        io.write(s.as_bytes()).unwrap();
+                        let s = format!("\"obj{}\" -> \"obj{}:{}:{}\" [label=\"{}\", arrowhead=none];\n", fnode.id(), fnode.id(), e.node().id(), e.value(), i);
+                        io.write(s.as_bytes()).unwrap();
+                        let s = format!("\"obj{}:{}:{}\" -> \"obj{}\";\n", fnode.id(), e.node().id(), e.value(), e.node().id());
+                        io.write(s.as_bytes()).unwrap();
+                    }
+                }
+            },
+            _ => (),
+        };
+        visited.insert(self.clone());
+    }
+}
+
+impl<E> DotNode for Edge<E> where E: EdgeValue {
+    type Node = Node<E>;
+    
+    fn dot_impl<T>(&self, io: &mut T, visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+        let f = self.node();
         if visited.contains(f) {
             return
         }
@@ -331,7 +365,7 @@ impl<E> Dot for EvMdd<E> where E: EdgeValue {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,e) in fnode.iter().enumerate() {
-                    self.dot_impl(io, e.node(), visited);
+                    e.dot_impl(io, visited);
                     if let Node::Omega | Node::NonTerminal(_) = e.node() {
                         let s = format!("\"obj{}:{}:{}\" [shape=diamond, label=\"{}\"];\n", fnode.id(), e.node().id(), e.value(), e.value());
                         io.write(s.as_bytes()).unwrap();
@@ -457,7 +491,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &f);
+            f.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -483,7 +517,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &g);
+            g.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -517,7 +551,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, z.node());
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -551,7 +585,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z.node());
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -585,7 +619,7 @@ mod tests {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
-            dd.dot(&mut io, &z.node());
+            z.dot(&mut io);
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
@@ -595,4 +629,33 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_dotnode() {
+        let mut dd: EvMdd = EvMdd::new();
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
+        let h3 = NodeHeader::new(2, 2, "z", 3);
+        
+        let f11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(0, dd.infinity())]);
+        let f12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let f21 = dd.create_node(&h2, &vec![Edge::new(0, f11.clone()), Edge::new(2, f11.clone())]);
+        let f22 = dd.create_node(&h2, &vec![Edge::new(1, f11.clone()), Edge::new(0, f12.clone())]);
+        let f = dd.create_node(&h3, &vec![Edge::new(0, f21.clone()), Edge::new(1, f22.clone()), Edge::new(2, f22.clone())]);
+
+        let g11 = dd.create_node(&h1, &vec![Edge::new(0, dd.omega()), Edge::new(2, dd.omega())]);
+        let g12 = dd.create_node(&h1, &vec![Edge::new(0, dd.infinity()), Edge::new(0, dd.omega())]);
+        let g21 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(0, dd.infinity())]);
+        let g22 = dd.create_node(&h2, &vec![Edge::new(0, g11.clone()), Edge::new(2, g12.clone())]);
+        let g = dd.create_node(&h3, &vec![Edge::new(0, g21.clone()), Edge::new(2, g21.clone()), Edge::new(1, g22.clone())]);
+
+        let z = dd.add(0, &f, 0, &g);
+
+        let mut buf = vec![];
+        {
+            let mut io = BufWriter::new(&mut buf);
+            z.dot(&mut io);
+        }
+        let s = std::str::from_utf8(&buf).unwrap();
+        println!("{}", s);
+    }
 }

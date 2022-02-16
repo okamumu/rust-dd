@@ -101,7 +101,7 @@ impl NodeHeader {
 #[derive(Debug)]
 pub struct TerminalNumber<V> {
     id: NodeId,
-    value: V
+    value: V,
 }
 
 impl<V> TerminalNumber<V> {
