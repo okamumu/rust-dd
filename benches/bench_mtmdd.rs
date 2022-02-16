@@ -1,5 +1,5 @@
 use dd::mtmdd::*;
-use dd::dot::Dot;
+use dd::dot::DotNode;
 
 fn bench_mtmdd1 () {
     let n = 100;
@@ -19,7 +19,7 @@ fn bench_mtmdd1 () {
     let mut buf = vec![];
     {
         let mut io = std::io::BufWriter::new(&mut buf);
-        f.dot(&mut io, &b);
+        b.dot(&mut io);
     }
     let s = std::str::from_utf8(&buf).unwrap();
     println!("{}", s);

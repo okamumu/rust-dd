@@ -1,7 +1,7 @@
 use dd::common::*;
 use dd::nodes::*;
 use dd::evplus_mdd::*;
-use dd::dot::Dot;
+use dd::dot::DotNode;
 
 // type Node<E,V> = EvMddNode<E,V>;
 

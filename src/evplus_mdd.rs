@@ -476,7 +476,7 @@ mod tests {
     }
     
     #[test]
-    fn new_test3() {
+    fn test_evmdd() {
         let mut dd: EvMdd = EvMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn new_test5() {
+    fn test_evmdd_min() {
         let mut dd: EvMdd = EvMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
@@ -556,13 +556,24 @@ mod tests {
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
+        println!("f");
+        for x in table(&dd, 0, &f) {
+            println!("{:?}", x);
+        }
+
+        println!("g");
+        for x in table(&dd, 0, &g) {
+            println!("{:?}", x);
+        }
+
+        println!("min(f,g)");
         for x in table(&dd, z.value(), z.node()) {
             println!("{:?}", x);
         }
     }
 
     #[test]
-    fn new_test6() {
+    fn test_evmdd_max() {
         let mut dd: EvMdd = EvMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
@@ -590,13 +601,24 @@ mod tests {
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
+        println!("f");
+        for x in table(&dd, 0, &f) {
+            println!("{:?}", x);
+        }
+
+        println!("g");
+        for x in table(&dd, 0, &g) {
+            println!("{:?}", x);
+        }
+
+        println!("max(f,g)");
         for x in table(&dd, z.value(), &z.node()) {
             println!("{:?}", x);
         }
     }
 
     #[test]
-    fn new_test_add() {
+    fn test_evmdd_add() {
         let mut dd: EvMdd = EvMdd::new();
         let h1 = NodeHeader::new(0, 0, "x", 2);
         let h2 = NodeHeader::new(1, 1, "y", 2);
@@ -624,6 +646,17 @@ mod tests {
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
+        println!("f");
+        for x in table(&dd, 0, &f) {
+            println!("{:?}", x);
+        }
+
+        println!("g");
+        for x in table(&dd, 0, &g) {
+            println!("{:?}", x);
+        }
+
+        println!("f+g");
         for x in table(&dd, z.value(), &z.node()) {
             println!("{:?}", x);
         }
