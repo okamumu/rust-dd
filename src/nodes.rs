@@ -16,20 +16,35 @@ use crate::common::{
 pub trait Terminal {
     /// type for value
     type Value;
+
     /// A method to get nodeid
     fn id(&self) -> NodeId;
+
     /// A method to get a value stored in terminal node
     fn value(&self) -> Self::Value;
 }
 
 /// The trait for non-terminal node.
 pub trait NonTerminal : Index<usize> + IndexMut<usize> {
-        type Node;
+    /// type for nodes stored in children
+    type Node;
+
+    /// A method to get nodeid.
     fn id(&self) -> NodeId;
+
+    /// A method to get the reference of node header.
     fn header(&self) -> &NodeHeader;
+
+    /// A method to get the level of node. This information is stored in node header.
     fn level(&self) -> Level;
+
+    /// A method to get the label (the name of variable) of node. This information is stored in node header.
     fn label(&self) -> &str;
+
+    /// A method to get iterator for children
     fn iter(&self) -> Iter<Self::Node>;
+
+    /// A method to get mutable iterator for children
     fn iter_mut(&mut self) -> IterMut<Self::Node>;
 }
 
