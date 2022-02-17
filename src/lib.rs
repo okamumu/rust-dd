@@ -1,6 +1,7 @@
 pub mod common;
 pub mod nodes;
 pub mod dot;
+pub mod gc;
 
 pub mod bdd;
 pub mod zdd;

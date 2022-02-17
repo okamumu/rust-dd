@@ -21,6 +21,10 @@ use crate::dot::{
     Dot,
 };
 
+use crate::gc::{
+    Gc,
+};
+
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     NOT,
@@ -307,48 +311,19 @@ impl ZddMut {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.cache.clear();
-    }
-    
-    pub fn rebuild(&mut self, fs: &[Node]) {
-        self.utable.clear();
-        let mut visited = HashSet::new();
-        for x in fs.iter() {
-            self.rebuild_table(x, &mut visited);
-        }
-    }
-
-    fn rebuild_table(&mut self, f: &Node, visited: &mut HashSet<Node>) {
-        if visited.contains(f) {
-            return
-        }
-        match f {
-            Node::NonTerminal(fnode) => {
-                let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
-                self.utable.insert(key, f.clone());
-                for x in fnode.borrow().iter() {
-                    self.rebuild_table(&x, visited);
-                }
-            },
-            _ => (),
-        };
-        visited.insert(f.clone());
-    }
-
     pub fn reduce(&mut self, f: &Node) -> Node {
         let mut mapping = HashMap::new();
-        self.reduce_(f, &mut mapping)
+        self._reduce(f, &mut mapping)
     }
 
-    fn reduce_(&mut self, f: &Node, mapping: &mut HashMap<Node,Node>) -> Node {
+    fn _reduce(&mut self, f: &Node, mapping: &mut HashMap<Node,Node>) -> Node {
         match mapping.get(f) {
             Some(x) => x.clone(),
             None => {
                 let node = match f {
                     Node::NonTerminal(fnode) => {
-                        let low = self.reduce_(&fnode.borrow()[0], mapping);
-                        let high = self.reduce_(&fnode.borrow()[1], mapping);
+                        let low = self._reduce(&fnode.borrow()[0], mapping);
+                        let high = self._reduce(&fnode.borrow()[1], mapping);
                         self.create_node(fnode.borrow().header(), &low, &high)
                     },
                     _ => f.clone(),
@@ -357,6 +332,35 @@ impl ZddMut {
                 node
             }
         }
+    }
+}
+
+impl Gc for ZddMut {
+    type Node = Node;
+
+    fn clear_cache(&mut self) {
+        self.cache.clear();
+    }
+    
+    fn clear_table(&mut self) {
+        self.utable.clear();
+    }
+    
+    fn gc_impl(&mut self, f: &Self::Node, visited: &mut HashSet<Self::Node>) {
+        if visited.contains(f) {
+            return
+        }
+        match f {
+            Node::NonTerminal(fnode) => {
+                let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
+                self.utable.insert(key, f.clone());
+                for x in fnode.borrow().iter() {
+                    self.gc_impl(&x, visited);
+                }
+            },
+            _ => (),
+        };
+        visited.insert(f.clone());
     }
 }
 

@@ -22,6 +22,10 @@ use crate::dot::{
     Dot,
 };
 
+use crate::gc::{
+    Gc,
+};
+
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     ADD,
@@ -373,21 +377,21 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
             }
         }
     }
+}
 
-    pub fn clear(&mut self) {
+impl<V> Gc for MtMdd<V> where V: TerminalNumberValue {
+    type Node = Node<V>;
+
+    fn clear_cache(&mut self) {
         self.cache.clear();
     }
     
-    pub fn rebuild(&mut self, fs: &[Node<V>]) {
+    fn clear_table(&mut self) {
         self.vtable.clear();
         self.utable.clear();
-        let mut visited = HashSet::new();
-        for x in fs.iter() {
-            self.rebuild_tables(x, &mut visited);
-        }
     }
-
-    fn rebuild_tables(&mut self, f: &Node<V>, visited: &mut HashSet<Node<V>>) {
+    
+    fn gc_impl(&mut self, f: &Self::Node, visited: &mut HashSet<Self::Node>) {
         if visited.contains(f) {
             return
         }
@@ -399,7 +403,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
                 let key = (fnode.header().id(), fnode.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
                 self.utable.insert(key, f.clone());
                 for x in fnode.iter() {
-                    self.rebuild_tables(&x, visited);
+                    self.gc_impl(&x, visited);
                 }
             },
         };

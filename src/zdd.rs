@@ -20,6 +20,10 @@ use crate::dot::{
     Dot,
 };
 
+use crate::gc::{
+    Gc,
+};
+
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     NOT,
@@ -302,20 +306,20 @@ impl Zdd {
             }
         }
     }
+}
 
-    pub fn clear(&mut self) {
+impl Gc for Zdd {
+    type Node = Node;
+
+    fn clear_cache(&mut self) {
         self.cache.clear();
     }
     
-    pub fn rebuild(&mut self, fs: &[Node]) {
+    fn clear_table(&mut self) {
         self.utable.clear();
-        let mut visited = HashSet::new();
-        for x in fs.iter() {
-            self.rebuild_table(x, &mut visited);
-        }
     }
-
-    fn rebuild_table(&mut self, f: &Node, visited: &mut HashSet<Node>) {
+    
+    fn gc_impl(&mut self, f: &Self::Node, visited: &mut HashSet<Self::Node>) {
         if visited.contains(f) {
             return
         }
@@ -324,7 +328,7 @@ impl Zdd {
                 let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
                 self.utable.insert(key, f.clone());
                 for x in fnode.iter() {
-                    self.rebuild_table(&x, visited);
+                    self.gc_impl(&x, visited);
                 }
             },
             _ => (),
