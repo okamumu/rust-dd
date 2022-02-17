@@ -2,16 +2,13 @@ use std::hash::Hash;
 use std::collections::VecDeque;
 
 use crate::common::{
-    HeaderId,
     NodeId,
     Level,
-    HashSet,
     HashMap,
 };
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
 };
 
@@ -53,7 +50,7 @@ impl<F> ZddFrontierBuilder<F> where F: FrontierState<Node=Node, EdgeIndex=usize>
         Self {
             num_nodes: 3,
             headers: headers.to_vec(),
-            nodes: HashMap::new(),
+            nodes: HashMap::default(),
             queue: VecDeque::new(),
         }
     }
@@ -95,7 +92,6 @@ impl<F> ZddFrontierBuilder<F> where F: FrontierState<Node=Node, EdgeIndex=usize>
 mod tests {
     use super::*;
     use std::io::BufWriter;
-    use std::rc::Rc;
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
@@ -158,20 +154,4 @@ mod tests {
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
     }
-
-    // #[test]
-    // fn frontier1() {
-    //     let mut dd = ZddMut::new();
-    //     let s = Combi(5,0);
-    //     let headers = (0..10).into_iter().map(|i| dd.header(i, &format!("x{}", i))).collect::<Vec<_>>();
-    //     let mut f = ZddFrontier {
-    //         num_nodes: 3,
-    //         headers: headers,
-    //         nodes: HashMap::new(),
-    //         queue: VecDeque::new(),
-    //     };
-
-    //     let root = f.frontier(&s);
-    //     // println!("{:?}", root);
-    // }
 }

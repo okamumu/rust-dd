@@ -109,9 +109,9 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
         Self {
             num_headers: 0,
             num_nodes: 0,
-            vtable: HashMap::new(),
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            vtable: HashMap::default(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 

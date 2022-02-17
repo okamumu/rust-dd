@@ -11,7 +11,6 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalMDD,
 };
@@ -110,8 +109,8 @@ impl Mdd {
             num_nodes: 2,
             zero: Node::Zero,
             one: Node::One,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 

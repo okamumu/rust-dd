@@ -12,7 +12,6 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalMDD,
     EvEdge,
@@ -110,8 +109,8 @@ impl<E> EvMdd<E> where E: EdgeValue {
             num_nodes: 2,
             infinity: Node::Infinity,
             omega: Node::Omega,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 
@@ -459,7 +458,6 @@ mod tests {
                     table_(dd, e.node(), &p, tab, s + e.value());
                 }
             },
-            _ => (),
         };
     }
 

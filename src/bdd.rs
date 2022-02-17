@@ -11,7 +11,6 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalBDD,
 };
@@ -106,8 +105,8 @@ impl Bdd {
             num_nodes: 2,
             zero: Node::Zero,
             one: Node::One,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 
@@ -276,6 +275,13 @@ impl Bdd {
     pub fn imp(&mut self, f: &Node, g: &Node) -> Node {
         let tmp = self.not(f);
         self.or(&tmp, g)
+    }
+
+    pub fn ite(&mut self, f: &Node, g: &Node, h: &Node) -> Node {
+        let x1 = self.and(f, g);
+        let barf = self.not(f);
+        let x2 = self.and(&barf, h);
+        self.or(&x1, &x2)
     }
 }
 

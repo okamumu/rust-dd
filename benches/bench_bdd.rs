@@ -2,6 +2,7 @@ use dd::common::*;
 use dd::nodes::*;
 use dd::bdd::*;
 // use dd::dot::*;
+use dd::gc::*;
 
 use dd::bdd_mut::*;
 
@@ -116,8 +117,8 @@ fn bench_bdd2 () {
     });
     println!("-bdd2 node {:?}", f.size());
     clock("-bench bdd2-2", ||{
-        f.clear();
-        f.rebuild(&vec![b]);
+        f.clear_cache();
+        f.gc(&vec![&b]);
     });
     println!("-bdd2 node {:?}", f.size());
 }
