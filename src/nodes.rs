@@ -32,7 +32,10 @@ pub trait NonTerminal : Index<usize> + IndexMut<usize> {
     /// A method to get nodeid.
     fn id(&self) -> NodeId;
 
-    /// A method to get the reference of node header.
+    /// A method to set nodeid.
+    fn set_id(&mut self, id: NodeId);
+
+        /// A method to get the reference of node header.
     fn header(&self) -> &NodeHeader;
 
     /// A method to get the level of node. This information is stored in node header.
@@ -170,6 +173,11 @@ impl<N> NonTerminal for NonTerminalBDD<N> {
     }
 
     #[inline]
+    fn set_id(&mut self, id: NodeId) {
+        self.id = id;
+    }
+
+    #[inline]
     fn header(&self) -> &NodeHeader {
         &self.header
     }
@@ -235,6 +243,11 @@ impl<N> NonTerminal for NonTerminalMDD<N> {
     #[inline]
     fn id(&self) -> NodeId {
         self.id
+    }
+
+    #[inline]
+    fn set_id(&mut self, id: NodeId) {
+        self.id = id;
     }
 
     #[inline]

@@ -7,6 +7,7 @@ use dd::nodes::{
 };
 use dd::mdd::*;
 use dd::dot::Dot;
+use dd::gc::Gc;
 
 fn clock<F>(s: &str, f: F) where F: FnOnce() {
     let start = std::time::Instant::now();
@@ -51,8 +52,8 @@ fn bench_mdd2 () {
     }
     {
         clock("-bench mdd2", ||{
-            f.clear();
-            f.rebuild(&vec![b]);
+            f.clear_cache();
+            f.gc(&vec![&b]);
         });
         println!("-mdd3 node {:?}", f.size());
     }

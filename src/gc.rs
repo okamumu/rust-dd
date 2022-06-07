@@ -8,9 +8,10 @@ pub trait Gc {
     fn clear_cache(&mut self);
     fn clear_table(&mut self);
 
-    fn gc(&mut self, fs: &[Self::Node]) {
+    fn gc(&mut self, fs: &[&Self::Node]) {
+        self.clear_cache();
         self.clear_table();
-        let mut visited = HashSet::new();
+        let mut visited = HashSet::default();
         for x in fs.iter() {
             self.gc_impl(x, &mut visited);
         }

@@ -15,5 +15,6 @@ pub mod evplus_mdd;
 // sample for BDD with RefCell
 pub mod bdd_mut;
 pub mod zdd_mut;
+pub mod mdd_mut;
 
 pub mod zdd_frontier;
