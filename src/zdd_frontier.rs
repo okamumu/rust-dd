@@ -12,10 +12,6 @@ use crate::nodes::{
     NonTerminal,
 };
 
-use crate::dot::{
-    Dot,
-};
-
 use crate::zdd_mut::{
     ZddMut,
     ZddMutNode,
@@ -92,7 +88,10 @@ impl<F> ZddFrontierBuilder<F> where F: FrontierState<Node=Node, EdgeIndex=usize>
 mod tests {
     use super::*;
     use std::io::BufWriter;
-
+    use crate::dot::{
+        Dot,
+    };
+        
     // impl Drop for Node {
     //     fn drop(&mut self) {
     //         println!("Dropping Node{}", self.id());
