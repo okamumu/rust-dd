@@ -1,4 +1,4 @@
-use dd::common::*;
+// use dd::common::*;
 use dd::nodes::*;
 use dd::bdd_mut::*;
 use dd::dot::*;
@@ -16,15 +16,15 @@ fn clock<F>(s: &str, f: F) where F: FnOnce() {
     println!("{}: time {}", s, end.as_secs_f64());
 }
 
-fn dot_print(f: &Node) {
-    let mut buf = vec![];
-    {
-        let mut io = BufWriter::new(&mut buf);
-        f.dot(&mut io);
-    }
-    let s = std::str::from_utf8(&buf).unwrap();
-    println!("{}", s);
-}
+// fn dot_print(f: &Node) {
+//     let mut buf = vec![];
+//     {
+//         let mut io = BufWriter::new(&mut buf);
+//         f.dot(&mut io);
+//     }
+//     let s = std::str::from_utf8(&buf).unwrap();
+//     println!("{}", s);
+// }
 
 fn find_minpath(dd: &Bdd, f: &Node, current: usize, minimum: &mut usize,
     path: &mut [usize], pset: &mut Vec<Box<[usize]>>) {

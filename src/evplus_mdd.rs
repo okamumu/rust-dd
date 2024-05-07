@@ -17,20 +17,16 @@ use crate::nodes::{
     EvEdge,
 };
 
-use crate::dot::{
-    Dot,
-};
+use crate::dot::Dot;
 
-use crate::gc::{
-    Gc,
-};
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     ADD,
     SUB,
-    MUL,
-    DIV,
+    // MUL,
+    // DIV,
     MIN,
     MAX,
 }

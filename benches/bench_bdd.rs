@@ -4,7 +4,7 @@ use dd::bdd::*;
 // use dd::dot::*;
 use dd::gc::*;
 
-use dd::bdd_mut::*;
+// use dd::bdd_mut::*;
 
 type Node = BddNode;
 
@@ -84,7 +84,7 @@ fn table_impl(dd: &Bdd, level: Level, f: &Node,
                 table_impl(dd, current_level, e, &p, tab);
             }
         },
-        _ => (),
+        // _ => (),
     };
 }
 

@@ -88,9 +88,7 @@ impl<F> ZddFrontierBuilder<F> where F: FrontierState<Node=Node, EdgeIndex=usize>
 mod tests {
     use super::*;
     use std::io::BufWriter;
-    use crate::dot::{
-        Dot,
-    };
+    use crate::dot::Dot;
         
     // impl Drop for Node {
     //     fn drop(&mut self) {

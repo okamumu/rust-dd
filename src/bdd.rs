@@ -15,13 +15,9 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
+use crate::dot::Dot;
 
-use crate::gc::{
-    Gc,
-};
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
