@@ -12,26 +12,21 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalMDD,
     EvEdge,
 };
 
-use crate::dot::{
-    Dot,
-};
+use crate::dot::Dot;
 
-use crate::gc::{
-    Gc,
-};
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
     ADD,
     SUB,
-    MUL,
-    DIV,
+    // MUL,
+    // DIV,
     MIN,
     MAX,
 }
@@ -110,8 +105,8 @@ impl<E> EvMdd<E> where E: EdgeValue {
             num_nodes: 2,
             infinity: Node::Infinity,
             omega: Node::Omega,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 
@@ -459,7 +454,6 @@ mod tests {
                     table_(dd, e.node(), &p, tab, s + e.value());
                 }
             },
-            _ => (),
         };
     }
 

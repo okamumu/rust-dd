@@ -12,7 +12,6 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalBDD,
 };
@@ -110,8 +109,8 @@ impl ZddMut {
             num_nodes: 3,
             zero: Node::Zero,
             one: Node::One,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 
@@ -312,7 +311,7 @@ impl ZddMut {
     }
 
     pub fn reduce(&mut self, f: &Node) -> Node {
-        let mut mapping = HashMap::new();
+        let mut mapping = HashMap::default();
         self._reduce(f, &mut mapping)
     }
 
@@ -344,6 +343,7 @@ impl Gc for ZddMut {
     
     fn clear_table(&mut self) {
         self.utable.clear();
+        self.num_nodes = 3;
     }
     
     fn gc_impl(&mut self, f: &Self::Node, visited: &mut HashSet<Self::Node>) {
@@ -352,6 +352,8 @@ impl Gc for ZddMut {
         }
         match f {
             Node::NonTerminal(fnode) => {
+                fnode.borrow_mut().set_id(self.num_nodes);
+                self.num_nodes += 1;
                 let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
                 self.utable.insert(key, f.clone());
                 for x in fnode.borrow().iter() {

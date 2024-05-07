@@ -1,13 +1,16 @@
 use num_traits::{NumOps, Zero, One};
-use std::fmt::{Display, Debug};
-use std::hash::Hash;
+use std::fmt::Display;
+use std::hash::{Hash, BuildHasherDefault};
+use wyhash::WyHash;
 
 pub type HeaderId = usize;
 pub type NodeId = usize;
 pub type Level = usize;
 
-pub type HashMap<T,U> = std::collections::HashMap<T,U>;
-pub type HashSet<T> = std::collections::HashSet<T>;
+// pub type HashMap<T,U> = std::collections::HashMap<T,U>;
+// pub type HashSet<T> = std::collections::HashSet<T>;
+pub type HashMap<T,U> = std::collections::HashMap<T,U,BuildHasherDefault<WyHash>>;
+pub type HashSet<T> = std::collections::HashSet<T,BuildHasherDefault<WyHash>>;
 // pub type HashMap<T,U> = hashbrown::HashMap<T,U>;
 // pub type HashSet<T> = hashbrown::HashSet<T>;
 

@@ -106,8 +106,8 @@ impl<V> Bdd<V> where V: TerminalBinaryValue {
             nodes: vec![Node::None, Node::new_terminal(1, V::low()), Node::new_terminal(2, V::high())],
             zero: 1,
             one: 2,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 

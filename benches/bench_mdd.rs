@@ -1,12 +1,13 @@
-use std::hash::Hash;
-use dd::common::{
-    HashMap,
-};
-use dd::nodes::{
-    NodeHeader,
-};
+// use std::hash::Hash;
+// use dd::common::{
+//     HashMap,
+// };
+// use dd::nodes::{
+//     NodeHeader,
+// };
 use dd::mdd::*;
-use dd::dot::Dot;
+// use dd::dot::Dot;
+use dd::gc::Gc;
 
 fn clock<F>(s: &str, f: F) where F: FnOnce() {
     let start = std::time::Instant::now();
@@ -51,25 +52,25 @@ fn bench_mdd2 () {
     }
     {
         clock("-bench mdd2", ||{
-            f.clear();
-            f.rebuild(&vec![b]);
+            f.clear_cache();
+            f.gc(&vec![&b]);
         });
         println!("-mdd3 node {:?}", f.size());
     }
 }
 
 fn bench_mdd3 () {
-    let data = [
-        vec![2, 1, 0],
-        vec![1, 0, 1],
-    ];
+    // let data = [
+    //     vec![2, 1, 0],
+    //     vec![1, 0, 1],
+    // ];
 
-    let mut f: Mdd = Mdd::new();
-    let one = f.one();
-    let zero = f.zero();
-    let h1 = f.header(1, "x1", 3);
-    let h2 = f.header(2, "x2", 2);
-    let h3 = f.header(3, "x3", 2);
+    // let mut f: Mdd = Mdd::new();
+    // let one = f.one();
+    // let zero = f.zero();
+    // let h1 = f.header(1, "x1", 3);
+    // let h2 = f.header(2, "x2", 2);
+    // let h3 = f.header(3, "x3", 2);
 
     // creat_mdd_node(&mut f, &vec![h1,h2,h3], &data);
 }

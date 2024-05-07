@@ -12,7 +12,6 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalBDD,
 };
@@ -73,7 +72,7 @@ impl Node {
             Self::NonTerminal(x) => x.borrow().id(),
             Self::Zero => 0,
             Self::One => 1,
-            _ => panic!("Did not get NodeId."),
+            Self::None => 2,
         }        
     }
 
@@ -103,14 +102,16 @@ pub struct BddMut {
 }
 
 impl BddMut {
+    const NUM_INITIAL_NODES: NodeId = 3;
+
     pub fn new() -> Self {
         Self {
             num_headers: 0,
-            num_nodes: 3,
+            num_nodes: Self::NUM_INITIAL_NODES,
             zero: Node::Zero,
             one: Node::One,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 
@@ -293,6 +294,7 @@ impl Gc for BddMut {
 
     fn clear_table(&mut self) {
         self.utable.clear();
+        self.num_nodes = BddMut::NUM_INITIAL_NODES;
     }
     
     fn gc_impl(&mut self, f: &Self::Node, visited: &mut HashSet<Self::Node>) {
@@ -301,6 +303,8 @@ impl Gc for BddMut {
         }
         match f {
             Node::NonTerminal(fnode) => {
+                fnode.borrow_mut().set_id(self.num_nodes);
+                self.num_nodes += 1;
                 let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
                 self.utable.insert(key, f.clone());
                 for x in fnode.borrow().iter() {

@@ -11,18 +11,13 @@ use crate::common::{
 
 use crate::nodes::{
     NodeHeader,
-    Terminal,
     NonTerminal,
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
+use crate::dot::Dot;
 
-use crate::gc::{
-    Gc,
-};
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -106,8 +101,8 @@ impl Bdd {
             num_nodes: 2,
             zero: Node::Zero,
             one: Node::One,
-            utable: HashMap::new(),
-            cache: HashMap::new(),
+            utable: HashMap::default(),
+            cache: HashMap::default(),
         }
     }
 
@@ -276,6 +271,28 @@ impl Bdd {
     pub fn imp(&mut self, f: &Node, g: &Node) -> Node {
         let tmp = self.not(f);
         self.or(&tmp, g)
+    }
+
+    pub fn nand(&mut self, f: &Node, g: &Node) -> Node {
+        let tmp = self.and(f, g);
+        self.not(&tmp)
+    }
+
+    pub fn nor(&mut self, f: &Node, g: &Node) -> Node {
+        let tmp = self.or(f, g);
+        self.not(&tmp)
+    }
+
+    pub fn xnor(&mut self, f: &Node, g: &Node) -> Node {
+        let tmp = self.xor(f, g);
+        self.not(&tmp)
+    }
+
+    pub fn ite(&mut self, f: &Node, g: &Node, h: &Node) -> Node {
+        let x1 = self.and(f, g);
+        let barf = self.not(f);
+        let x2 = self.and(&barf, h);
+        self.or(&x1, &x2)
     }
 }
 
