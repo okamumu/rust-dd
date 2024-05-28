@@ -34,3 +34,7 @@ harness = false
 [[bench]]
 name = "bench_ft2"
 harness = false
+
+[[bench]]
+name = "bench_minsol"
+harness = false

@@ -65,7 +65,7 @@ pub struct NodeHeader(Rc<NodeHeaderData>);
 impl Deref for NodeHeader {
     type Target = Rc<NodeHeaderData>;
     
-    fn deref(&self) -> &Rc<NodeHeaderData> {
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -123,7 +123,6 @@ pub struct TerminalNumber<V> {
 }
 
 impl<V> TerminalNumber<V> {
-    #[inline]
     pub fn new(id: NodeId, value: V) -> Self {
         Self {
             id: id,
@@ -154,7 +153,6 @@ pub struct NonTerminalBDD<N> {
 }
 
 impl<N> NonTerminalBDD<N> {
-    #[inline]
     pub fn new(id: NodeId, header: NodeHeader, nodes: [N; 2]) -> Self {
         Self {
             id: id,
@@ -227,7 +225,6 @@ pub struct NonTerminalMDD<N> {
 }
 
 impl<N> NonTerminalMDD<N> {
-    #[inline]
     pub fn new(id: NodeId, header: NodeHeader, nodes: Box<[N]>) -> Self {
         Self {
             id: id,
@@ -299,7 +296,6 @@ pub struct EvEdge<V,N> {
 }
 
 impl<V,N> EvEdge<V,N> where V: EdgeValue {
-    #[inline]
     pub fn new(value: V, node: N) -> Self {
         Self {
             value: value,
