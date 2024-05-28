@@ -19,22 +19,15 @@ use std::fmt::Display;
 
 type Node = BddNode;
 
-fn clock<F>(s: &str, f: F) where F: FnOnce() {
-    let start = std::time::Instant::now();
-    f();
-    let end = start.elapsed();
-    println!("{}: time {}", s, end.as_secs_f64());
+macro_rules! clock {
+    ($s:expr, $block:block) => {{
+        let start = std::time::Instant::now();
+        let result = { $block };
+        let end = start.elapsed();
+        println!("Time elapsed ({}): {} seconds", $s, end.as_secs_f64());
+        result
+    }};
 }
-
-// macro_rules! ftand {
-//     ($dd:ident, $($x:expr),+) => {{
-//         let mut tmp = $dd.one();
-//         $(
-//             tmp = $dd.and(&tmp, &$x);
-//         )*
-//         tmp
-//     }};
-// }
 
 macro_rules! ftand {
     ($dd:ident, $($x:expr),+) => {{
@@ -45,16 +38,6 @@ macro_rules! ftand {
         ftand($dd, &tmp)
     }};
 }
-
-// macro_rules! ftor {
-//     ($dd:ident, $($x:expr),+) => {{
-//         let mut tmp = $dd.zero();
-//         $(
-//             tmp = $dd.or(&tmp, &$x);
-//         )*
-//         tmp
-//     }};
-// }
 
 macro_rules! ftor {
     ($dd:ident, $($x:expr),+) => {{
@@ -208,37 +191,26 @@ fn todot(dd: &mut Bdd, f: &Node) -> String {
 
 fn bench_ft3 () {
     let mut dd: Bdd = Bdd::new();
-    // let labels = ["A","B","C","D","E","F","G","H"];
-    // let vars = generate_vars(&mut dd, &labels);
 
-    // let f = ftkofn(&mut dd, 2, &vec![
-    //     vars[labels[1]].clone(),
-    //     vars[labels[2]].clone(),
-    //     vars[labels[3]].clone(),
-    //     vars[labels[4]].clone()
-    // ]);
-    let start = std::time::Instant::now();
-    let f = make_benchft(&mut dd);
-    let end = start.elapsed();
-    println!("create time {}", end.as_secs_f64());
+    let f = clock!("Create BDD", {
+        let f = make_benchft(&mut dd);
+        f
+    });
 
     println!("size {:?}", dd.size());
     println!("(nodes, edges) {:?}", dd.count(&f));
 
-    let start = std::time::Instant::now();
-    let g = mcsbdd(&mut dd, &f);
-    let result = mcsvec(&dd, &g);
-    let end = start.elapsed();
-    println!("MCS time {}", end.as_secs_f64());
+    let (g, result) = clock!("MCS", {
+        let g = mcsbdd(&mut dd, &f);
+        let result = mcsvec(&dd, &g);
+        (g, result)
+    });
 
     println!("(nodes, edges) {:?}", dd.count(&g));
     println!("mcs {:?}", result.len());
 }
 
 fn make_benchft(dd: &mut Bdd) -> Node {
-    let n = 61;
-    // let labels: Vec<usize> = (1..=n).rev().collect();
-
     let labels = [1,6,34,8,35,7,36,9,37,38,39,40,41,30,32,46,48,50,31,33,47,49,51,53,2,10,3,11,4,12,5,13,14,15,16,17,18,19,20,21,52,42,44,22,23,24,25,26,27,28,29,54,58,43,45,55,59,56,60,57,61];
     let c = generate_vars(dd, &labels);
 
@@ -330,5 +302,7 @@ fn make_benchft(dd: &mut Bdd) -> Node {
 }
 
 fn main() {
-    clock("bench ft100", bench_ft3);
+    clock!("Total", {
+        bench_ft3()
+    })
 }
