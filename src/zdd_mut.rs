@@ -16,13 +16,9 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
-
-use crate::gc::{
-    Gc,
-};
+use crate::dot::Dot;
+use crate::count::Count;
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -366,6 +362,36 @@ impl Gc for ZddMut {
     }
 }
 
+impl Count for Node {
+    type NodeId = NodeId;
+    type T = u64;
+
+    fn count_edge_impl(&self, visited: &mut HashSet<NodeId>) -> Self::T {
+        let key = self.id();
+        match visited.get(&key) {
+            Some(_) => 0,
+            None => {
+                match self {
+                    Node::NonTerminal(fnode) => {
+                        let mut sum = 0;
+                        for x in fnode.borrow().iter() {
+                            let tmp = x.count_edge_impl(visited);
+                            sum += tmp + 1;
+                        }
+                        visited.insert(key);
+                        sum
+                    },
+                    Node::One | Node::Zero => {
+                        visited.insert(key);
+                        0
+                    },
+                    Node::None => panic!("An edge is not connected to any node.")
+                }
+            }
+        }
+    }
+}
+
 impl Dot for Node {
     type Node = Node;
 
@@ -479,7 +505,6 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
-
     }
 
     #[test]
@@ -498,7 +523,6 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
-
     }
 
     #[test]
@@ -517,6 +541,5 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
-
     }
 }

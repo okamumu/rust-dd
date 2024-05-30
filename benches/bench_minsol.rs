@@ -9,11 +9,10 @@ use dd::common::{
 use dd::nodes::*;
 use dd::bdd::*;
 use dd::dot::*;
+use dd::count::*;
 use dd::gc::*;
 
 use std::hash::Hash;
-
-use std::io::BufWriter;
 
 use std::fmt::Display;
 
@@ -75,17 +74,6 @@ fn ftor(dd: &mut Bdd, nodes: &[Node]) -> Node {
     tmp
 }
 
-/*
-function _koutofn(b::BDD.Forest, k::Int, args)
-    n = length(args)
-    (k == 1) && return BDD.or!(b, args...)
-    (k == n) && return BDD.and!(b, args...)
-    x = args[1]
-    xs = args[2:end]
-    BDD.ifthenelse!(b, x, _koutofn(b, k-1, xs), _koutofn(b, k, xs))
-end
-*/
-
 fn ftkofn(dd: &mut Bdd, k: usize, nodes: &[Node]) -> Node {
     let n = nodes.len();
     match k {
@@ -93,7 +81,7 @@ fn ftkofn(dd: &mut Bdd, k: usize, nodes: &[Node]) -> Node {
         k if k == n => ftand(dd, nodes),
         _ => {
             match nodes {
-                [v, rest @ ..] => {
+                [rest @ .., v] => {
                     let x = ftkofn(dd, k-1, rest);
                     let y = ftkofn(dd, k, rest);
                     dd.ite(v, &x, &y)
@@ -103,16 +91,6 @@ fn ftkofn(dd: &mut Bdd, k: usize, nodes: &[Node]) -> Node {
         },
     }
 }
-
-// fn dot_print(f: &Node) {
-//     let mut buf = vec![];
-//     {
-//         let mut io = BufWriter::new(&mut buf);
-//         f.dot(&mut io);
-//     }
-//     let s = std::str::from_utf8(&buf).unwrap();
-//     println!("{}", s);
-// }
 
 fn mcsbdd(dd: &mut Bdd, f: &Node) -> Node {
     let mut cache: HashMap<NodeId,Node>  = HashMap::default();
@@ -136,7 +114,7 @@ fn minsol(dd: &mut Bdd, f: &Node, cache: &mut HashMap<NodeId,Node>) -> Node {
                 Node::Zero | Node::One => f.clone(),
                 Node::NonTerminal(fnode) => {
                     let tmp = minsol(dd, &fnode[1], cache);
-                    let high = dd.diff(&tmp, &fnode[0]);
+                    let high = dd.setdiff(&tmp, &fnode[0]);
                     let low = minsol(dd, &fnode[0], cache);
                     dd.create_node(fnode.header(), &low, &high)
                 },
@@ -174,21 +152,6 @@ fn generate_vars<T>(dd: &mut Bdd, labels: &[T]) -> HashMap<T,Node> where T: Disp
     result
 }
 
-// macro_rules! vars {
-//     ($dd:ident, $labels:expr) => {{
-//         generate_vars(&mut $dd, &$labels)
-//     }};
-// }
-
-fn todot(dd: &mut Bdd, f: &Node) -> String {
-    let mut buf = vec![];
-    {
-        let mut io = BufWriter::new(&mut buf);
-        f.dot(&mut io);
-    }
-    std::str::from_utf8(&buf).unwrap().to_string()
-}
-
 fn bench_ft3 () {
     let mut dd: Bdd = Bdd::new();
 
@@ -198,7 +161,7 @@ fn bench_ft3 () {
     });
 
     println!("size {:?}", dd.size());
-    println!("(nodes, edges) {:?}", dd.count(&f));
+    println!("(nodes, edges) {:?}", f.count());
 
     let (g, result) = clock!("MCS", {
         let g = mcsbdd(&mut dd, &f);
@@ -206,7 +169,7 @@ fn bench_ft3 () {
         (g, result)
     });
 
-    println!("(nodes, edges) {:?}", dd.count(&g));
+    println!("(nodes, edges) {:?}", g.count());
     println!("mcs {:?}", result.len());
 }
 

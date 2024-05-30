@@ -15,13 +15,9 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
-
-use crate::gc::{
-    Gc,
-};
+use crate::dot::Dot;
+use crate::count::Count;
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -336,6 +332,32 @@ impl Gc for Zdd {
     }
 }
 
+impl Count for Node {
+    type NodeId = NodeId;
+    type T = u64;
+
+    fn count_edge_impl(&self, visited: &mut HashSet<NodeId>) -> Self::T {
+        let key = self.id();
+        match visited.get(&key) {
+            Some(_) => 0,
+            None => {
+                match self {
+                    Node::NonTerminal(fnode) => {
+                        let tmp0 = fnode[0].count_edge_impl(visited);
+                        let tmp1 = fnode[1].count_edge_impl(visited);
+                        visited.insert(key);
+                        tmp0 + tmp1 + 2
+                    },
+                    Node::One | Node::Zero => {
+                        visited.insert(key);
+                        0
+                    },
+                }
+            }
+        }
+    }
+}
+
 impl Dot for Node {
     type Node = Node;
 
@@ -442,14 +464,8 @@ mod tests {
         let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.intersect(&x, &y);
 
-        let mut buf = vec![];
-        {
-            let mut io = BufWriter::new(&mut buf);
-            z.dot(&mut io);
-        }
-        let s = std::str::from_utf8(&buf).unwrap();
-        println!("{}", s);
-
+        println!("{:?}", z.count());
+        println!("{}", z.dot_string());
     }
 
     #[test]

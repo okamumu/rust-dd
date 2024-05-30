@@ -137,7 +137,7 @@ impl<V> Bdd<V> where V: TerminalBinaryValue {
         }
     }
 
-    fn create_node(&mut self, h: &NodeHeader, low: NodeId, high: NodeId) -> NodeId {
+    pub fn create_node(&mut self, h: &NodeHeader, low: NodeId, high: NodeId) -> NodeId {
         if low == high {
             return low
         }
