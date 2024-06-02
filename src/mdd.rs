@@ -34,16 +34,12 @@ pub enum MddNode {
     NonTerminal(Rc<NonTerminalMDD<Node>>),
     Zero,
     One,
+    Undet,
 }
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::NonTerminal(x), Self::NonTerminal(y)) => x.id() == y.id(),
-            (Self::Zero, Self::Zero) => true,
-            (Self::One, Self::One) => true,
-            _ => false
-        }
+        self.id() == other.id()
     }
 }
 
@@ -70,6 +66,7 @@ impl Node {
             Self::NonTerminal(x) => x.id(),
             Self::Zero => 0,
             Self::One => 1,
+            Self::Undet => 2,
         }        
     }
 
@@ -94,6 +91,7 @@ pub struct Mdd {
     num_nodes: NodeId,
     zero: Node,
     one: Node,
+    undet: Node,
     utable: HashMap<(HeaderId, Box<[NodeId]>), Node>,
     cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
@@ -102,9 +100,10 @@ impl Mdd {
     pub fn new() -> Self {
         Self {
             num_headers: 0,
-            num_nodes: 2,
+            num_nodes: 3,
             zero: Node::Zero,
             one: Node::One,
+            undet: Node::Undet,
             utable: HashMap::default(),
             cache: HashMap::default(),
         }
@@ -153,6 +152,10 @@ impl Mdd {
         self.one.clone()
     }
 
+    pub fn undet(&self) -> Node {
+        self.undet.clone()
+    }
+
     pub fn not(&mut self, f: &Node) -> Node {
         let key = (Operation::NOT, f.id(), 0);
         match self.cache.get(&key) {
@@ -165,6 +168,7 @@ impl Mdd {
                         let nodes = fnode.iter().map(|f| self.not(f)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
                     },
+                    _ => self.undet()
                 };
                 self.cache.insert(key, node.clone());
                 node
@@ -195,7 +199,7 @@ impl Mdd {
                         let nodes = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.and(f, g)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
                     },
-                    _ => panic!("error"),
+                    _ => self.undet()
                 };
                 self.cache.insert(key, node.clone());
                 node
@@ -226,7 +230,7 @@ impl Mdd {
                         let nodes = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.or(f, g)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
                     },
-                    _ => panic!("error"),
+                    _ => self.undet()
                 };
                 self.cache.insert(key, node.clone());
                 node
@@ -257,12 +261,19 @@ impl Mdd {
                         let nodes = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.xor(f, g)).collect::<Vec<_>>();
                         self.create_node(fnode.header(), &nodes)
                     },
-                    _ => panic!("error"),
+                    _ => self.undet()
                 };
                 self.cache.insert(key, node.clone());
                 node
             }
         }
+    }
+
+    pub fn ite(&mut self, f: &Node, g: &Node, h: &Node) -> Node {
+        let x1 = self.and(f, g);
+        let barf = self.not(f);
+        let x2 = self.and(&barf, h);
+        self.or(&x1, &x2)
     }
 }
 
@@ -314,7 +325,7 @@ impl Count for Node {
                         visited.insert(key);
                         sum
                     },
-                    Node::One | Node::Zero => {
+                    Node::One | Node::Zero | Node::Undet => {
                         visited.insert(key);
                         0
                     },
@@ -344,11 +355,14 @@ impl Dot for Node {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
                 io.write(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
-                    x.dot_impl(io, visited);
-                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
-                    io.write(s.as_bytes()).unwrap();
+                    if let Node::Zero | Node::One | Node::NonTerminal(_) = x {
+                        x.dot_impl(io, visited);
+                        let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
+                        io.write(s.as_bytes()).unwrap();
+                    }
                 }
             },
+            _ => ()
         };
         visited.insert(self.clone());
     }

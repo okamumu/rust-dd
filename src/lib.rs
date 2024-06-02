@@ -10,6 +10,8 @@ pub mod mdd;
 pub mod mtmdd;
 pub mod evplus_mdd;
 
+pub mod mtmdd2;
+
 // sample for BDD with NodeId
 // pub mod bdd2;
 
