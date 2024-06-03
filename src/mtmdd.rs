@@ -24,12 +24,12 @@ use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    MIN,
-    MAX,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Min,
+    Max,
 }
 
 type Node<V> = MtMddNode<V>;
@@ -60,7 +60,7 @@ impl<V> Node<V> where V: TerminalNumberValue {
         let x = NonTerminalMDD::new(
             id,
             header.clone(),
-            nodes.iter().map(|x| x.clone()).collect::<Vec<_>>().into_boxed_slice(),
+            nodes.to_vec().into_boxed_slice(),
         );
         Self::NonTerminal(Rc::new(x))
     }
@@ -101,6 +101,12 @@ pub struct MtMdd<V> {
     vtable: HashMap<V,Node<V>>,
     utable: HashMap<(HeaderId, Box<[NodeId]>), Node<V>>,
     cache: HashMap<(Operation, NodeId, NodeId), Node<V>>,
+}
+
+impl<V> Default for MtMdd<V> where V: TerminalNumberValue {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<V> MtMdd<V> where V: TerminalNumberValue {
@@ -167,7 +173,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
     
     pub fn add(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
-        let key = (Operation::ADD, f.id(), g.id());
+        let key = (Operation::Add, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -202,7 +208,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
     
     pub fn sub(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
-        let key = (Operation::SUB, f.id(), g.id());
+        let key = (Operation::Sub, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -237,7 +243,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
 
     pub fn mul(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
-        let key = (Operation::MUL, f.id(), g.id());
+        let key = (Operation::Mul, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -272,7 +278,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
 
     pub fn div(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
-        let key = (Operation::DIV, f.id(), g.id());
+        let key = (Operation::Div, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -307,7 +313,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
     
     pub fn min(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
-        let key = (Operation::MIN, f.id(), g.id());
+        let key = (Operation::Min, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -342,7 +348,7 @@ impl<V> MtMdd<V> where V: TerminalNumberValue {
     }
 
     pub fn max(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
-        let key = (Operation::MAX, f.id(), g.id());
+        let key = (Operation::Max, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -401,7 +407,7 @@ impl<V> Gc for MtMdd<V> where V: TerminalNumberValue {
                 let key = (fnode.header().id(), fnode.iter().map(|x| x.id()).collect::<Vec<_>>().into_boxed_slice());
                 self.utable.insert(key, f.clone());
                 for x in fnode.iter() {
-                    self.gc_impl(&x, visited);
+                    self.gc_impl(x, visited);
                 }
             },
             _ => (),
@@ -449,16 +455,16 @@ impl<V> Dot for Node<V> where V: TerminalNumberValue {
         match self {
             Node::Terminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=square, label=\"{}\"];\n", fnode.id(), fnode.value());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
                     if let Node::Terminal(_) | Node::NonTerminal(_) = x {
                         x.dot_impl(io, visited);
                         let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
-                        io.write(s.as_bytes()).unwrap();
+                        io.write_all(s.as_bytes()).unwrap();
                     }
                 }
             },
@@ -502,7 +508,7 @@ mod tests {
         let zero = Node::new_terminal(0, 0);
         let one = Node::new_terminal(1, 1);
         let h = NodeHeader::new(0, 0, "x", 2);
-        let x = Node::new_nonterminal(3, &h, &vec![zero, one]);
+        let x = Node::new_nonterminal(3, &h, &[zero, one]);
         println!("{:?}", x);
         if let Node::NonTerminal(x) = &x {
             println!("{:?}", x.header());

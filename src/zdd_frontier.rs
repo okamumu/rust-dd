@@ -129,7 +129,7 @@ mod tests {
     fn frontier1() {
         let mut dd = ZddMut::new();
         let s = Combi(5,0);
-        let headers = (0..10).into_iter().map(|i| dd.header(i, &format!("x{}", i))).collect::<Vec<_>>();
+        let headers = (0..10).map(|i| dd.header(i, &format!("x{}", i))).collect::<Vec<_>>();
         let mut f = ZddFrontierBuilder::new(&headers);
         let root = f.build(&s);
 

@@ -8,9 +8,9 @@ pub trait Dot {
         let s1 = "digraph { layout=dot; overlap=false; splines=true; node [fontsize=10];\n";
         let s2 = "}\n";
         let mut visited: HashSet<Self::Node> = HashSet::default();
-        io.write(s1.as_bytes()).unwrap();
+        io.write_all(s1.as_bytes()).unwrap();
         self.dot_impl(io, &mut visited);
-        io.write(s2.as_bytes()).unwrap();
+        io.write_all(s2.as_bytes()).unwrap();
     }
 
     fn dot_string(&self) -> String {

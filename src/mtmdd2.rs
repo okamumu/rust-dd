@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::hash::{Hash, Hasher};
 
 use crate::common::{
@@ -14,8 +13,6 @@ use crate::nodes::{
     NodeHeader,
     Terminal,
     NonTerminal,
-    TerminalNumber,
-    NonTerminalMDD,
 };
 
 use crate::mtmdd::{
@@ -34,15 +31,15 @@ use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    EQ,
-    NEQ,
-    LT,
-    LTE,
-    GT,
-    GTE,
-    IF,
-    ELSE,
-    UNION,
+    Eq,
+    NEq,
+    Lt,
+    LtE,
+    Gt,
+    GtE,
+    If,
+    Else,
+    Union,
 }
 
 type VNode<V> = MtMddNode<V>;
@@ -86,6 +83,12 @@ pub struct MtMdd2<V> {
     num_headers: HeaderId,
     bcache: HashMap<(Operation, NodeId, NodeId), BNode>,
     vcache: HashMap<(Operation, NodeId, NodeId), VNode<V>>,
+}
+
+impl<V> Default for MtMdd2<V> where V: TerminalNumberValue {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<V> MtMdd2<V> where V: TerminalNumberValue {
@@ -152,70 +155,70 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
 
     pub fn and(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.and(&fnode, &gnode)),
+            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.and(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn or(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.or(&fnode, &gnode)),
+            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.or(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn xor(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.xor(&fnode, &gnode)),
+            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.xor(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn not(&mut self, f: &Node<V>) -> Node<V> {
         match f {
-            Node::Bool(fnode) => Node::Bool(self.mdd.not(&fnode)),
+            Node::Bool(fnode) => Node::Bool(self.mdd.not(fnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn add(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.add(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.add(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn sub(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.sub(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.sub(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn mul(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.mul(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.mul(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn div(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.div(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.div(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn max(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.max(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.max(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn min(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.min(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.min(fnode, gnode)),
             _ => Node::Undet,
         }
     }
@@ -223,16 +226,16 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     pub fn eq(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
             (Node::Bool(fnode), Node::Bool(gnode)) => {
-                let tmp = self.mdd.xor(&fnode, &gnode);
+                let tmp = self.mdd.xor(fnode, gnode);
                 Node::Bool(self.mdd.not(&tmp))
             },
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.veq(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.veq(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn veq(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::EQ, f.id(), g.id());
+        let key = (Operation::Eq, f.id(), g.id());
         match self.bcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -269,14 +272,14 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
 
     pub fn neq(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.xor(&fnode, &gnode)),
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vneq(&fnode, &gnode)),
+            (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.xor(fnode, gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vneq(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn vneq(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::NEQ, f.id(), g.id());
+        let key = (Operation::NEq, f.id(), g.id());
         match self.bcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -313,13 +316,13 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     
     pub fn lt(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vlt(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vlt(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn vlt(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::LT, f.id(), g.id());
+        let key = (Operation::Lt, f.id(), g.id());
         match self.bcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -356,13 +359,13 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
 
     pub fn lte(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vlte(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vlte(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn vlte(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::LTE, f.id(), g.id());
+        let key = (Operation::LtE, f.id(), g.id());
         match self.bcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -399,13 +402,13 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
 
     pub fn gt(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vgt(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vgt(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn vgt(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::GT, f.id(), g.id());
+        let key = (Operation::Gt, f.id(), g.id());
         match self.bcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -442,13 +445,13 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
 
     pub fn gte(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vgte(&fnode, &gnode)),
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vgte(fnode, gnode)),
             _ => Node::Undet,
         }
     }
 
     pub fn vgte(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::GTE, f.id(), g.id());
+        let key = (Operation::GtE, f.id(), g.id());
         match self.bcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -484,7 +487,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     }
 
     fn vif(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::IF, f.id(), g.id());
+        let key = (Operation::If, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -516,7 +519,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     }
 
     fn velse(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::ELSE, f.id(), g.id());
+        let key = (Operation::Else, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -548,7 +551,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     }
 
     fn vunion(&mut self, f: &VNode<V>, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::UNION, f.id(), g.id());
+        let key = (Operation::Union, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -592,10 +595,10 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     pub fn ifelse(&mut self, f: &Node<V>, g: &Node<V>, h: &Node<V>) -> Node<V> {
         match (f, g, h) {
             (Node::Bool(fnode), Node::Value(gnode), Node::Value(hnode)) => {
-                Node::Value(self.vifelse(&fnode, &gnode, &hnode))
+                Node::Value(self.vifelse(fnode, gnode, hnode))
             },
             (Node::Bool(fnode), Node::Bool(gnode), Node::Bool(hnode)) => {
-                Node::Bool(self.mdd.ite(&fnode, &gnode, &hnode))
+                Node::Bool(self.mdd.ite(fnode, gnode, hnode))
             },
             _ => Node::Undet,
         }
@@ -619,11 +622,11 @@ impl<V> Gc for MtMdd2<V> where V: TerminalNumberValue {
         match f {
             Node::Bool(bnode) => {
                 let mut visited: HashSet<BNode> = HashSet::default();
-                self.mdd.gc_impl(&bnode, &mut visited)
+                self.mdd.gc_impl(bnode, &mut visited)
             },
             Node::Value(vnode) => {
                 let mut visited: HashSet<VNode<V>> = HashSet::default();
-                self.mtmdd.gc_impl(&vnode, &mut visited)
+                self.mtmdd.gc_impl(vnode, &mut visited)
             },
             _ => ()
         }
@@ -643,9 +646,7 @@ impl<V> Dot for Node<V> where V: TerminalNumberValue {
                 let mut visited = HashSet::<BNode>::default();
                 f.dot_impl(io, &mut visited)
             },
-            Node::Undet => {
-                writeln!(io, "undet [label=\"undet\", shape=ellipse];").unwrap();
-            },
+            Node::Undet => (),
         }
     }
 }
@@ -653,7 +654,6 @@ impl<V> Dot for Node<V> where V: TerminalNumberValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{io::BufWriter, ops::RangeInclusive};
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
@@ -668,13 +668,13 @@ mod tests {
         let h1 = f.header(1, "y1", 2);
         let h2 = f.header(2, "y2", 2);
         let h3 = f.header(3, "y3", 2);
-        let consts: Vec<_> = (0..n).into_iter().map(|i| f.value(i)).collect();
-        let y1 = f.node(&h1, &[consts[0].clone(), consts[1].clone()]).unwrap();
-        let y2 = f.node(&h2, &[consts[0].clone(), consts[1].clone()]).unwrap();
+        let consts: Vec<_> = (0..n).map(|i| f.value(i)).collect();
+        let _y1 = f.node(&h1, &[consts[0].clone(), consts[1].clone()]).unwrap();
+        let _y2 = f.node(&h2, &[consts[0].clone(), consts[1].clone()]).unwrap();
         let y3 = f.node(&h3, &[consts[0].clone(), consts[1].clone()]).unwrap();
         // let tmp2 = f.mul(&consts[2], &y2);
-        let tmp3 = f.mul(&consts[3], &y3);
-        let tmp4 = f.lt(&y3, &consts[2]);
+        let _tmp3 = f.mul(&consts[3], &y3);
+        let _tmp4 = f.lt(&y3, &consts[2]);
     }
 
     fn gen_var<T>(f: &mut MtMdd2<T>, label: &str, level: usize, range: &[T]) -> MtMdd2Node<T>
@@ -691,8 +691,8 @@ mod tests {
     fn test_ope2() {
         // x + y <= 5, 0 <= x <= 5, 0 <= y <= 5
         let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &vec![0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &vec![0,1,2,3,4,5]);
+        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
         let tmp1 = f.add(&x, &y);
         let tmp2 = f.value(5);
         let tmp3 = f.lte(&tmp1, &tmp2);
@@ -703,13 +703,13 @@ mod tests {
     fn test_ope3() {
         // ifelse(x + y <= 5, x, y), 0 <= x <= 5, 0 <= y <= 5
         let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &vec![0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &vec![0,1,2,3,4,5]);
+        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
         let tmp1 = f.add(&x, &y);
         let tmp2 = f.value(5);
         let tmp3 = f.lte(&tmp1, &tmp2);
-        let c1 = f.value(19);
-        let c2 = f.value(20);
+        let _c1 = f.value(19);
+        let _c2 = f.value(20);
         let tmp4 = f.ifelse(&tmp3, &x, &y);
         println!("{}", tmp4.dot_string());
     }
