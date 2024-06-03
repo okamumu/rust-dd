@@ -53,7 +53,7 @@ fn bench_mdd2 () {
     {
         clock("-bench mdd2", ||{
             f.clear_cache();
-            f.gc(&vec![&b]);
+            f.gc(&vec![b.clone()]);
         });
         println!("-mdd3 node {:?}", f.size());
     }

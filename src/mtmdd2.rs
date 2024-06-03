@@ -41,6 +41,8 @@ enum Operation {
     GT,
     GTE,
     IF,
+    ELSE,
+    UNION,
 }
 
 type VNode<V> = MtMddNode<V>;
@@ -52,6 +54,29 @@ pub enum MtMdd2Node<V> {
     Value(VNode<V>),
     Bool(BNode),
     Undet,
+}
+
+impl<V> PartialEq for Node<V> where V: TerminalNumberValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Node::Value(f), Node::Value(g)) => f.id() == g.id(),
+            (Node::Bool(f), Node::Bool(g)) => f.id() == g.id(),
+            (Node::Undet, Node::Undet) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<V> Eq for Node<V> where V: TerminalNumberValue {}
+
+impl<V> Hash for Node<V> where V: TerminalNumberValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Node::Value(f) => f.id().hash(state),
+            Node::Bool(f) => f.id().hash(state),
+            Node::Undet => 0.hash(state),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,9 +99,11 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
         }
     }
 
-    // pub fn size(&self) -> (usize, HeaderId, NodeId, usize) {
-    //     (self.mdd.vtable.len() + self.mtmdd.vtable(), self.num_headers, self.num_nodes, self.utable.len())
-    // }
+    pub fn size(&self) -> (usize, HeaderId, NodeId, usize) {
+        let (u1, _x1, y1, z1) = self.mtmdd.size();
+        let (_x2, y2, z2) = self.mdd.size();
+        (u1, self.num_headers, y1+y2, z1+z2)
+    }
    
     pub fn one(&self) -> Node<V> {
         Node::Bool(self.mdd.one())
@@ -95,22 +122,6 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
         self.num_headers += 1;
         h
     }
-
-    // pub fn bnode(&mut self, h: &NodeHeader, nodes: &[BNode]) -> Result<Node<V>,String> {
-    //     if h.edge_num() == nodes.len() {
-    //         Ok(Node::Bool(self.mdd.create_node(h, nodes)))
-    //     } else {
-    //         Err(String::from("Did not match the number of edges in header and arguments."))
-    //     }
-    // }
-
-    // pub fn vnode(&mut self, h: &NodeHeader, nodes: &[VNode<V>]) -> Result<Node<V>,String> {
-    //     if h.edge_num() == nodes.len() {
-    //         Ok(Node::Value(self.mtmdd.create_node(h, nodes)))
-    //     } else {
-    //         Err(String::from("Did not match the number of edges in header and arguments."))
-    //     }
-    // }
 
     pub fn node(&mut self, h: &NodeHeader, nodes: &[Node<V>]) -> Result<Node<V>,String> {
         if h.edge_num() != nodes.len() {
@@ -505,7 +516,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     }
 
     fn velse(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::IF, f.id(), g.id());
+        let key = (Operation::ELSE, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -537,7 +548,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     }
 
     fn vunion(&mut self, f: &VNode<V>, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::IF, f.id(), g.id());
+        let key = (Operation::UNION, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -591,10 +602,58 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
     }
 }
 
+impl<V> Gc for MtMdd2<V> where V: TerminalNumberValue {
+    type Node = Node<V>;
+
+    fn clear_cache(&mut self) {
+        self.mdd.clear_cache();
+        self.mtmdd.clear_cache();
+    }
+    
+    fn clear_table(&mut self) {
+        self.mdd.clear_table();
+        self.mtmdd.clear_table();
+    }
+    
+    fn gc_impl(&mut self, f: &Self::Node, _visited: &mut HashSet<Self::Node>) {
+        match f {
+            Node::Bool(bnode) => {
+                let mut visited: HashSet<BNode> = HashSet::default();
+                self.mdd.gc_impl(&bnode, &mut visited)
+            },
+            Node::Value(vnode) => {
+                let mut visited: HashSet<VNode<V>> = HashSet::default();
+                self.mtmdd.gc_impl(&vnode, &mut visited)
+            },
+            _ => ()
+        }
+    }
+}
+
+impl<V> Dot for Node<V> where V: TerminalNumberValue {
+    type Node = Node<V>;
+
+    fn dot_impl<T>(&self, io: &mut T, _visited: &mut HashSet<Self::Node>) where T: std::io::Write {
+        match self {
+            Node::Value(f) => {
+                let mut visited = HashSet::<VNode<V>>::default();
+                f.dot_impl(io, &mut visited)
+            },
+            Node::Bool(f) => {
+                let mut visited = HashSet::<BNode>::default();
+                f.dot_impl(io, &mut visited)
+            },
+            Node::Undet => {
+                writeln!(io, "undet [label=\"undet\", shape=ellipse];").unwrap();
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::BufWriter;
+    use std::{io::BufWriter, ops::RangeInclusive};
 
     // impl Drop for Node {
     //     fn drop(&mut self) {
@@ -616,5 +675,42 @@ mod tests {
         // let tmp2 = f.mul(&consts[2], &y2);
         let tmp3 = f.mul(&consts[3], &y3);
         let tmp4 = f.lt(&y3, &consts[2]);
+    }
+
+    fn gen_var<T>(f: &mut MtMdd2<T>, label: &str, level: usize, range: &[T]) -> MtMdd2Node<T>
+    where
+        T: TerminalNumberValue,
+    {
+        let count = range.len();
+        let htmp = f.header(level, label, count);
+        let tmp = range.iter().map(|&i| f.value(i)).collect::<Vec<_>>();
+        f.node(&htmp, &tmp).unwrap()
+    }
+
+    #[test]
+    fn test_ope2() {
+        // x + y <= 5, 0 <= x <= 5, 0 <= y <= 5
+        let mut f = MtMdd2::<i64>::new();
+        let x = gen_var(&mut f, "x", 1, &vec![0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &vec![0,1,2,3,4,5]);
+        let tmp1 = f.add(&x, &y);
+        let tmp2 = f.value(5);
+        let tmp3 = f.lte(&tmp1, &tmp2);
+        println!("{}", tmp3.dot_string());
+    }
+
+    #[test]
+    fn test_ope3() {
+        // ifelse(x + y <= 5, x, y), 0 <= x <= 5, 0 <= y <= 5
+        let mut f = MtMdd2::<i64>::new();
+        let x = gen_var(&mut f, "x", 1, &vec![0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &vec![0,1,2,3,4,5]);
+        let tmp1 = f.add(&x, &y);
+        let tmp2 = f.value(5);
+        let tmp3 = f.lte(&tmp1, &tmp2);
+        let c1 = f.value(19);
+        let c2 = f.value(20);
+        let tmp4 = f.ifelse(&tmp3, &x, &y);
+        println!("{}", tmp4.dot_string());
     }
 }

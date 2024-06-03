@@ -314,3 +314,9 @@ impl<V,N> EvEdge<V,N> where V: EdgeValue {
     }
 }
 
+#[macro_export]
+macro_rules! nodes {
+    ($($elem:expr),*) => {
+        vec![$($elem.clone()),*]
+    };
+}

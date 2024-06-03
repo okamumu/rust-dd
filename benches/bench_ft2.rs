@@ -112,7 +112,7 @@ fn bench_ft1 () {
     println!("{:?}", result);
     println!("size {:?}", dd.size());
 
-    dd.gc(&[&f]);
+    dd.gc(&[f.clone()]);
     println!("size {:?}", dd.size());
 
     let mut buf = vec![];
@@ -204,7 +204,7 @@ fn bench_ft2() {
     println!("{:?}", result);
     println!("size {:?}", dd.size());
 
-    dd.gc(&[&f]);
+    dd.gc(&[f.clone()]);
     println!("size {:?}", dd.size());
 }
 

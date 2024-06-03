@@ -380,6 +380,8 @@ impl Dot for Node {
 
 #[cfg(test)]
 mod tests {
+    use crate::nodes;
+
     use super::*;
     use std::io::BufWriter;
 
@@ -509,6 +511,7 @@ mod tests {
         let y = dd.create_node(&h2, &vec![dd.zero(), dd.one()]);
         let z = dd.and(&x, &y);
         let z = dd.not(&z);
+        dd.gc(&nodes![z]);
 
         let mut buf = vec![];
         {

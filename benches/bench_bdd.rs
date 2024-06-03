@@ -118,7 +118,7 @@ fn bench_bdd2 () {
     println!("-bdd2 node {:?}", f.size());
     clock("-bench bdd2-2", ||{
         f.clear_cache();
-        f.gc(&vec![&b]);
+        f.gc(&vec![b.clone()]);
     });
     println!("-bdd2 node {:?}", f.size());
 }
