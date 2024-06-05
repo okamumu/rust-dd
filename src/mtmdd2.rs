@@ -115,6 +115,10 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
         &self.mdd
     }
 
+    pub fn mdd_mut(&mut self) -> &mut Mdd {
+        &mut self.mdd
+    }
+
     pub fn size(&self) -> (usize, HeaderId, NodeId, usize) {
         let (u1, _x1, y1, z1) = self.mtmdd.size();
         let (_x2, y2, z2) = self.mdd.size();
