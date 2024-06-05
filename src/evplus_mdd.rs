@@ -34,6 +34,8 @@ enum Operation {
 type Node<E> = EvMddNode<E>;
 type Edge<E> = EvEdge<E,Node<E>>;
 
+type NodeKey<E> = (HeaderId, Box<[(E,NodeId)]>);
+
 #[derive(Debug,Clone)]
 pub enum EvMddNode<E> {
     NonTerminal(Rc<NonTerminalMDD<EvEdge<E,Node<E>>>>),
@@ -94,7 +96,8 @@ pub struct EvMdd<E = i64> where E: EdgeValue {
     num_nodes: NodeId,
     omega: Node<E>,
     infinity: Node<E>,
-    utable: HashMap<(HeaderId, Box<[(E,NodeId)]>), Node<E>>,
+    utable: HashMap<NodeKey<E>, Node<E>>,
+    // utable: HashMap<(HeaderId, Box<[E]>, Box<[NodeId]>), Node<E>>,
     cache: HashMap<(Operation, NodeId, NodeId, E), Edge<E>>,
 }
 
@@ -130,7 +133,7 @@ impl<E> EvMdd<E> where E: EdgeValue {
         if h.edge_num() == edges.len() {
             Ok(self.create_node(h, edges))
         } else {
-            Err(format!("Did not match the number of edges in header and arguments."))
+            Err(String::from("Did not match the number of edges in header and arguments."))
         }
     }
 
@@ -140,6 +143,9 @@ impl<E> EvMdd<E> where E: EdgeValue {
         }
         
         let key = (h.id(), edges.iter().map(|x| (x.value(), x.node().id())).collect::<Vec<_>>().into_boxed_slice());
+        // let key = (h.id(),
+        //     edges.iter().map(|x| x.value()).collect::<Vec<_>>().into_boxed_slice(),
+        //     edges.iter().map(|x| x.node().id()).collect::<Vec<_>>().into_boxed_slice());
         match self.utable.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -348,6 +354,9 @@ impl<E> Gc for EvMdd<E> where E: EdgeValue {
         }
         if let Node::NonTerminal(fnode) = f {
             let key = (fnode.header().id(), fnode.iter().map(|x| (x.value(), x.node().id())).collect::<Vec<_>>().into_boxed_slice());
+            // let key = (fnode.header().id(),
+            //     fnode.iter().map(|x| x.value()).collect::<Vec<_>>().into_boxed_slice(),
+            //     fnode.iter().map(|x| x.node().id()).collect::<Vec<_>>().into_boxed_slice());
             self.utable.insert(key, f.clone());
             for x in fnode.iter() {
                 self.gc_impl(x.node(), visited);
@@ -442,7 +451,7 @@ mod tests {
         tab
     }
 
-    pub fn table_<E>(dd: &EvMdd<E>, f: &Node<E>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<E>)>, s: E) where E: EdgeValue {
+    pub fn table_<E>(_dd: &EvMdd<E>, f: &Node<E>, path: &[usize], tab: &mut Vec<(Vec<usize>,Option<E>)>, s: E) where E: EdgeValue {
         match f {
             Node::Infinity => {
                 tab.push((path.to_vec(), None));
@@ -454,7 +463,7 @@ mod tests {
                 for (i,e) in fnode.iter().enumerate() {
                     let mut p = path.to_vec();
                     p.push(i);
-                    table_(dd, e.node(), &p, tab, s + e.value());
+                    table_(_dd, e.node(), &p, tab, s + e.value());
                 }
             },
         };

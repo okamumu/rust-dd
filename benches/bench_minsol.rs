@@ -30,33 +30,54 @@ macro_rules! clock {
 
 macro_rules! ftand {
     ($dd:ident, $($x:expr),+) => {{
-        let mut tmp = Vec::new();
-        $(
-            tmp.push($x.clone());
-        )*
+        let tmp = vec![$($x.clone()),+];
         ftand($dd, &tmp)
     }};
 }
 
+// macro_rules! ftand {
+//     ($dd:ident, $($x:expr),+) => {{
+//         let mut tmp = Vec::new();
+//         $(
+//             tmp.push($x.clone());
+//         )*
+//         ftand($dd, &tmp)
+//     }};
+// }
+
 macro_rules! ftor {
     ($dd:ident, $($x:expr),+) => {{
-        let mut tmp = Vec::new();
-        $(
-            tmp.push($x.clone());
-        )*
+        let tmp = vec![$($x.clone()),+];
         ftor($dd, &tmp)
     }};
 }
 
+// macro_rules! ftor {
+//     ($dd:ident, $($x:expr),+) => {{
+//         let mut tmp = Vec::new();
+//         $(
+//             tmp.push($x.clone());
+//         )*
+//         ftor($dd, &tmp)
+//     }};
+// }
+
 macro_rules! ftkofn {
     ($dd:ident, $k:expr, $($x:expr),+) => {{
-        let mut tmp = Vec::new();
-        $(
-            tmp.push($x.clone());
-        )*
+        let tmp = vec![$($x.clone()),+];
         ftkofn($dd, $k, &tmp)
     }};
 }
+
+// macro_rules! ftkofn {
+//     ($dd:ident, $k:expr, $($x:expr),+) => {{
+//         let mut tmp = Vec::new();
+//         $(
+//             tmp.push($x.clone());
+//         )*
+//         ftkofn($dd, $k, &tmp)
+//     }};
+// }
 
 fn ftand(dd: &mut Bdd, nodes: &[Node]) -> Node {
     let mut tmp = dd.one();
@@ -94,8 +115,7 @@ fn ftkofn(dd: &mut Bdd, k: usize, nodes: &[Node]) -> Node {
 
 fn mcsbdd(dd: &mut Bdd, f: &Node) -> Node {
     let mut cache: HashMap<NodeId,Node>  = HashMap::default();
-    let top = minsol(dd, f, &mut cache);
-    top
+    minsol(dd, f, &mut cache)
 }
 
 fn mcsvec(dd: &Bdd, f: &Node) -> Vec<Box<[usize]>> {

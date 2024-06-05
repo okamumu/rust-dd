@@ -105,14 +105,10 @@ mod tests {
     
         fn check(&self) -> CheckResult<Node> {
             let value = self.1;
-            if self.0 < value {
-                CheckResult::Terminal(Node::Zero)
-            } else {
-                if self.0 == value {
-                    CheckResult::Terminal(Node::One)
-                } else {
-                    CheckResult::NonTerminal
-                }
+            match self.0 {
+                _ if self.0 < value => CheckResult::Terminal(Node::Zero),
+                _ if self.0 == value => CheckResult::Terminal(Node::One),
+                _ => CheckResult::NonTerminal,
             }
         }
     

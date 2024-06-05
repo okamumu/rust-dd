@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 
 use crate::common::{
@@ -100,6 +101,18 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
             bcache: HashMap::default(),
             vcache: HashMap::default()
         }
+    }
+
+    pub fn mtmdd(&self) -> &MtMdd<V> {
+        &self.mtmdd
+    }
+
+    pub fn mtmdd_mut(&mut self) -> &mut MtMdd<V> {
+        &mut self.mtmdd
+    }
+
+    pub fn mdd(&self) -> &Mdd {
+        &self.mdd
     }
 
     pub fn size(&self) -> (usize, HeaderId, NodeId, usize) {
@@ -486,7 +499,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
         }
     }
 
-    fn vif(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
+    pub fn vif(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
         let key = (Operation::If, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
@@ -518,7 +531,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
         }
     }
 
-    fn velse(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
+    pub fn velse(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
         let key = (Operation::Else, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
@@ -550,7 +563,7 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
         }
     }
 
-    fn vunion(&mut self, f: &VNode<V>, g: &VNode<V>) -> VNode<V> {
+    pub fn vunion(&mut self, f: &VNode<V>, g: &VNode<V>) -> VNode<V> {
         let key = (Operation::Union, f.id(), g.id());
         match self.vcache.get(&key) {
             Some(x) => x.clone(),
@@ -603,6 +616,20 @@ impl<V> MtMdd2<V> where V: TerminalNumberValue {
             _ => Node::Undet,
         }
     }
+
+    pub fn case(&mut self, conds: &[(Node<V>, Node<V>)], default: &Node<V>) -> Node<V> {
+        let mut h = default.clone();
+        for (f, g) in conds.iter().rev() {
+            h = match (f, g, h) {
+                (Node::Bool(fnode), Node::Value(gnode), Node::Value(hnode)) =>
+                    Node::Value(self.vifelse(fnode, gnode, &hnode)),
+                (Node::Bool(fnode), Node::Value(gnode), Node::Undet) =>
+                    Node::Value(self.vifelse(fnode, gnode, &VNode::Undet)),
+                _ => Node::Undet,
+            }
+        }
+        h
+    }
 }
 
 impl<V> Gc for MtMdd2<V> where V: TerminalNumberValue {
@@ -651,6 +678,201 @@ impl<V> Dot for Node<V> where V: TerminalNumberValue {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Token<V> {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Neq,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    And,
+    Or,
+    Not,
+    Xor,
+    IfElse,
+    Value(Node<V>),
+}
+
+pub fn build_from_rpn<V>(dd: &mut MtMdd2<V>, tokens: &[Token<V>]) -> Result<Node<V>, String>
+    where V: TerminalNumberValue + std::str::FromStr
+{
+    let mut stack: Vec<Node<V>> = Vec::new();
+
+    for token in tokens {
+        match token {
+            Token::Add => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.add(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Sub => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.sub(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Mul => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.mul(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Div => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.div(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Eq => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.eq(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Neq => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.neq(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Lt => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.lt(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Lte => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.lte(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Gt => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.gt(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Gte => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.gte(&a, &b);
+                stack.push(tmp);
+            }
+            Token::And => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.and(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Or => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.or(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Xor => {
+                let b = stack.pop().ok_or("Stack underflow")?;
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.xor(&a, &b);
+                stack.push(tmp);
+            }
+            Token::Not => {
+                let a = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.not(&a);
+                stack.push(tmp);
+            }
+            Token::IfElse => {
+                let else_branch = stack.pop().ok_or("Stack underflow")?;
+                let then_branch = stack.pop().ok_or("Stack underflow")?;
+                let condition = stack.pop().ok_or("Stack underflow")?;
+                let tmp = dd.ifelse(&condition, &then_branch, &else_branch);
+                stack.push(tmp);
+            }
+            Token::Value(node) => stack.push(node.clone()),
+        }
+    }
+    if stack.len() == 1 {
+        Ok(stack.pop().unwrap())
+    } else {
+        Err("The expression is invalid.".to_string())
+    }
+}
+
+pub fn gen_var<T>(f: &mut MtMdd2<T>, label: &str, level: usize, range: &[T]) -> Node<T>
+where
+    T: TerminalNumberValue,
+{
+    let count = range.len();
+    let htmp = f.header(level, label, count);
+    let tmp = range.iter().map(|&i| f.value(i)).collect::<Vec<_>>();
+    f.node(&htmp, &tmp).unwrap()
+}
+
+#[macro_export]
+macro_rules! build_from_rpn {
+    ($dd:ident, $($token:tt)*) => {{
+        let tokens = vec![
+            $(rpn_token!($dd, $token)),*
+        ];
+        build_from_rpn(&mut $dd, &tokens)
+    }};
+}
+
+#[macro_export]
+macro_rules! rpn_token {
+    ($dd:ident, +) => {
+        Token::Add
+    };
+    ($dd:ident, -) => {
+        Token::Sub
+    };
+    ($dd:ident, *) => {
+        Token::Mul
+    };
+    ($dd:ident, /) => {
+        Token::Div
+    };
+    ($dd:ident, ==) => {
+        Token::Eq
+    };
+    ($dd:ident, !=) => {
+        Token::Neq
+    };
+    ($dd:ident, <=) => {
+        Token::Lte
+    };
+    ($dd:ident, >=) => {
+        Token::Gte
+    };
+    ($dd:ident, &&) => {
+        Token::And
+    };
+    ($dd:ident, ||) => {
+        Token::Or
+    };
+    ($dd:ident, ?) => {
+        Token::IfElse
+    };
+    ($dd:ident, $value:literal) => {
+        Token::Value($dd.value($value))
+    };
+    ($dd:ident, $ident:expr) => {
+        Token::Value($ident.clone())
+    };
+}
+
+// fn testfn() {
+//     let mut f = MtMdd2::<i64>::new();
+//     let tokens = mtmdd_expr!{f, xx y + 5 <= x x y + 3 >= y x ? ?};
+// }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -675,16 +897,6 @@ mod tests {
         // let tmp2 = f.mul(&consts[2], &y2);
         let _tmp3 = f.mul(&consts[3], &y3);
         let _tmp4 = f.lt(&y3, &consts[2]);
-    }
-
-    fn gen_var<T>(f: &mut MtMdd2<T>, label: &str, level: usize, range: &[T]) -> MtMdd2Node<T>
-    where
-        T: TerminalNumberValue,
-    {
-        let count = range.len();
-        let htmp = f.header(level, label, count);
-        let tmp = range.iter().map(|&i| f.value(i)).collect::<Vec<_>>();
-        f.node(&htmp, &tmp).unwrap()
     }
 
     #[test]
@@ -712,5 +924,72 @@ mod tests {
         let _c2 = f.value(20);
         let tmp4 = f.ifelse(&tmp3, &x, &y);
         println!("{}", tmp4.dot_string());
+    }
+
+    #[test]
+    fn test_ope4() {
+        // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
+        let mut f = MtMdd2::<i64>::new();
+        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
+        let tmp1 = f.add(&x, &y);
+        let tmp2 = f.value(5);
+        let tmp3 = f.lte(&tmp1, &tmp2);
+        let tmp4 = f.value(3);
+        let tmp5 = f.gte(&tmp1, &tmp4);
+        let res = f.case(&[(tmp3.clone(), x.clone()), (tmp5.clone(), y.clone())], &x);
+        println!("{}", res.dot_string());
+    }
+
+    #[test]
+    fn test_ope5() {
+        // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
+        let mut f = MtMdd2::<i64>::new();
+        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
+        // x y + 5 <= x x y + 3 >= y x ? ?
+        let tokens = vec![
+            Token::Value(x.clone()),
+            Token::Value(y.clone()),
+            Token::Add,
+            Token::Value(f.value(5)),
+            Token::Lte,
+            Token::Value(x.clone()),
+            Token::Value(x.clone()),
+            Token::Value(y.clone()),
+            Token::Add,
+            Token::Value(f.value(3)),
+            Token::Gte,
+            Token::Value(y.clone()),
+            Token::Value(x.clone()),
+            Token::IfElse,
+            Token::IfElse,
+        ];
+        let res = build_from_rpn(&mut f, &tokens);
+        match res {
+            Ok(res) => {
+                println!("{}", res.dot_string())
+            },
+            Err(e) => {
+                println!("{}", e)
+            }
+        }
+    }
+
+    #[test]
+    fn test_ope6() {
+        // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
+        let mut f = MtMdd2::<i64>::new();
+        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
+        let res = build_from_rpn!{f, x y + 5 <= x x y + 3 >= y x ? ?};
+        match res {
+            Ok(res) => {
+                println!("{}", res.dot_string())
+            },
+            Err(e) => {
+                println!("{}", e)
+            }
+        }
     }
 }
