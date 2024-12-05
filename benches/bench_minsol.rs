@@ -160,6 +160,37 @@ fn extract(dd: &Bdd, f: &Node, path: &mut Vec<usize>, pset: &mut Vec<Box<[usize]
     }
 }
 
+fn critical(dd: &mut Bdd, f: &Node, level: Level, cache: &mut HashMap<NodeId,Node>) -> Node {
+    let key = f.id();
+    match cache.get(&key) {
+        Some(x) => x.clone(),
+        None => {
+            let node = match f {
+                Node::Zero | Node::One => dd.zero(),
+                Node::NonTerminal(fnode) if fnode.level() > level => {
+                        let low = critical(dd, &fnode[0], level, cache);
+                        let high = critical(dd, &fnode[1], level, cache);
+                        dd.create_node(fnode.header(), &low, &high)
+                },
+                Node::NonTerminal(fnode) if fnode.level() == level => {
+                    dd.xor(&fnode[0], &fnode[1])
+                },
+                Node::NonTerminal(fnode) if fnode.level() < level => {
+                    dd.zero()
+                },
+                _ => panic!("error"),
+            };
+            cache.insert(key, node.clone());
+            node
+        }
+    }
+}
+
+fn criticalbdd(dd: &mut Bdd, f: &Node, level: Level) -> Node {
+    let mut cache: HashMap<NodeId,Node>  = HashMap::default();
+    critical(dd, f, level, &mut cache)
+}
+
 fn generate_vars<T>(dd: &mut Bdd, labels: &[T]) -> HashMap<T,Node> where T: Display + Eq + Hash + Clone {
     let headers: Vec<_> = labels.iter()
         .enumerate()
@@ -284,8 +315,61 @@ fn make_benchft(dd: &mut Bdd) -> Node {
     top
 }
 
+fn make_benchf2(dd: &mut Bdd, labels: &[&str]) -> Node {
+    let c = generate_vars(dd, labels);
+
+    let g1 = ftand!(dd, c[&labels[0]], c[&labels[1]]);
+    let g2 = ftand!(dd, c[&labels[2]], c[&labels[3]]);
+    // let top = ftkofn!(dd, 2, g1, g2, g3, g4);
+    let top = ftor!(dd, g1, g2, c[&labels[4]]);
+    top
+}
+
+fn bench_ft4 () {
+    let mut dd: Bdd = Bdd::new();
+
+    let labels = ["a", "b", "c", "d", "e"];
+    let headers: HashMap<_,_> = labels.iter()
+        .enumerate()
+        .map(|(i,x)| (x, dd.header(i, &format!("{}", x))))
+        .collect();
+    let a = dd.create_node(&headers[&"a"], &dd.zero(), &dd.one());
+    let b = dd.create_node(&headers[&"b"], &dd.zero(), &dd.one());
+    let c = dd.create_node(&headers[&"c"], &dd.zero(), &dd.one());
+    let d = dd.create_node(&headers[&"d"], &dd.zero(), &dd.one());
+    let e = dd.create_node(&headers[&"e"], &dd.zero(), &dd.one());
+
+    let x = &mut dd;
+    let g1 = ftand!(x, a, b);
+    let g2 = ftand!(x, c, d);
+    // let top = ftkofn!(dd, 2, g1, g2, g3, g4);
+    let f = ftor!(x, g1, g2, e);
+
+    println!("size {:?}", dd.size());
+    println!("(nodes, edges) {:?}", f.count());
+
+    if let BddNode::NonTerminal(fnode) = &f {
+        let tmp = dd.xor(&fnode[0], &fnode[1]);
+        println!("{}", tmp.dot_string());
+    }
+
+    let g = criticalbdd(&mut dd, &f, 0);
+    println!("{}", g.dot_string());
+    // let result = mcsvec(&dd, &g);
+    // for x in result.iter() {
+    //     let tmp: Vec<_> = x.iter().map(|y| labels[*y]).collect();
+    //     println!("{:?}", tmp);
+    // }
+
+    println!("(nodes, edges) {:?}", g.count());
+    // println!("mcs {:?}", result.len());
+}
+
 fn main() {
     clock!("Total", {
         bench_ft3()
-    })
+    });
+    clock!("Total", {
+        bench_ft4()
+    });
 }

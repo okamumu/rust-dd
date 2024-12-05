@@ -126,15 +126,15 @@ impl ZddMut {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err(String::from("Did not match the number of edges in header and arguments."))
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err(String::from("Did not match the number of edges in header and arguments."))
+    //     }
+    // }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
+    pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if let Node::Zero = high {
             return low.clone()
         }

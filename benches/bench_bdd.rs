@@ -92,7 +92,7 @@ fn bench_bdd1 () {
     let n = 1000;
     let mut f: Bdd = Bdd::new();
     let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
-    let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
+    let x = (0..n).into_iter().map(|i| f.create_node(&h[i], &f.zero(), &f.one())).collect::<Vec<_>>();
 
     let mut b = f.one();
     clock("-bench bdd1-1", ||{
@@ -109,7 +109,7 @@ fn bench_bdd2 () {
     let mut b = f.one();
     clock("-bench bdd2-1", ||{
         let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
-        let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
+        let x = (0..n).into_iter().map(|i| f.create_node(&h[i], &f.zero(), &f.one())).collect::<Vec<_>>();
     
         for i in (0..n).rev() {
             b = f.and(&b, &x[i]);
@@ -127,7 +127,7 @@ fn bench_bdd3 () {
     let n = 3;
     let mut f: Bdd = Bdd::new();
     let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i))).collect::<Vec<_>>();
-    let x = (0..n).into_iter().map(|i| f.node(&h[i], &vec![f.zero(), f.one()]).unwrap()).collect::<Vec<_>>();
+    let x = (0..n).into_iter().map(|i| f.create_node(&h[i], &f.zero(), &f.one())).collect::<Vec<_>>();
 
     let b = f.and(&x[0], &x[1]);
     let b = f.or(&b, &x[2]);

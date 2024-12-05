@@ -1,3 +1,44 @@
+/// BDD (Binary Decision Diagram) implementation.
+/// 
+/// Description:
+/// 
+/// A BDD is a rooted directed acyclic graph (DAG) with two terminal nodes, 0 and 1.
+/// Each non-terminal node has a level and two edges, low and high.
+/// The level is an integer that represents the variable of the node.
+/// The low and high edges are the child nodes of the node.
+/// 
+/// The BDD has a unique table that stores the non-terminal nodes.
+/// The table is a hash table that maps a tuple of (level, low, high) to a non-terminal node.
+/// 
+/// The BDD has a cache that stores the result of the operations.
+/// The cache is a hash table that maps a tuple of (operation, f, g) to a node.
+/// 
+/// The BDD has the following operations:
+/// - not(f): negation of f
+/// - and(f, g): conjunction of f and g
+/// - or(f, g): disjunction of f and g
+/// - xor(f, g): exclusive or of f and g
+/// - setdiff(f, g): set difference of f and g
+/// - imp(f, g): implication of f and g
+/// - nand(f, g): nand of f and g
+/// - nor(f, g): nor of f and g
+/// - xnor(f, g): exclusive nor of f and g
+/// - ite(f, g, h): if-then-else of f, g, and h
+/// 
+/// The BDD has the following methods:
+/// - header(level, label): create a new header
+/// - node(header, nodes): create a new non-terminal node
+/// - create_node(header, low, high): create a new non-terminal node
+/// - zero(): return the terminal node 0
+/// - one(): return the terminal node 1
+/// - size(): return the number of headers, nodes, and the size of the unique table
+/// 
+/// The BDD has the following traits:
+/// - Gc: garbage collection
+/// - Count: count the number of edges
+/// - Dot: output the graph in DOT format
+/// 
+
 use std::rc::Rc;
 use std::hash::{Hash, Hasher};
 
@@ -123,13 +164,13 @@ impl Bdd {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err("Did not match the number of edges in header and arguments.".to_string())
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err("Did not match the number of edges in header and arguments.".to_string())
+    //     }
+    // }
 
     pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if low == high {
@@ -210,6 +251,37 @@ impl Bdd {
         }
     }
     
+    pub fn and2(&mut self, f: &Node, g: &Node) {
+        let mut tokens = vec![];
+        let mut stack = vec![];
+        let x = (f.clone(), g.clone());
+        stack.push(x);
+        while let Some((f, g)) = stack.pop() {
+            match (&f, &g) {
+                (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
+                    let x = (fnode[0].clone(), g.clone());
+                    stack.push(x);
+                    let x = (fnode[1].clone(), g.clone());
+                    stack.push(x);
+                },
+                (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
+                    let key = (f.clone(), gnode[0].clone());
+                    stack.push(key);
+                    let key = (f.clone(), gnode[1].clone());
+                    stack.push(key);
+                },
+                (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
+                    let key = (fnode[0].clone(), gnode[0].clone());
+                    stack.push(key);
+                    let key = (fnode[1].clone(), gnode[1].clone());
+                    stack.push(key);
+                },
+                _ => (),
+            };
+            tokens.push((f, g));
+        }
+    }
+
     pub fn or(&mut self, f: &Node, g: &Node) -> Node {
         let key = (Operation::Or, f.id(), g.id());
         match self.cache.get(&key) {

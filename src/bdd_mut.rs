@@ -127,15 +127,15 @@ impl BddMut {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err("Did not match the number of edges in header and arguments.".to_string())
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err("Did not match the number of edges in header and arguments.".to_string())
+    //     }
+    // }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
+    pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if low == high {
             return low.clone()
         }
