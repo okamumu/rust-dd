@@ -65,7 +65,7 @@ pub struct NodeHeader(Rc<NodeHeaderData>);
 impl Deref for NodeHeader {
     type Target = Rc<NodeHeaderData>;
     
-    fn deref(&self) -> &Rc<NodeHeaderData> {
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -87,10 +87,10 @@ impl Hash for NodeHeader {
 impl NodeHeader {
     pub fn new(id: HeaderId, level: Level, label: &str, edge_num: usize) -> Self {
         let data = NodeHeaderData {
-            id: id,
-            level: level,
+            id,
+            level,
             label: label.to_string(),
-            edge_num: edge_num,
+            edge_num,
         };
         Self(Rc::new(data))
     }
@@ -123,11 +123,10 @@ pub struct TerminalNumber<V> {
 }
 
 impl<V> TerminalNumber<V> {
-    #[inline]
     pub fn new(id: NodeId, value: V) -> Self {
         Self {
-            id: id,
-            value: value,
+            id,
+            value,
         }
     }
 }
@@ -154,12 +153,11 @@ pub struct NonTerminalBDD<N> {
 }
 
 impl<N> NonTerminalBDD<N> {
-    #[inline]
     pub fn new(id: NodeId, header: NodeHeader, nodes: [N; 2]) -> Self {
         Self {
-            id: id,
-            header: header,
-            nodes: nodes,
+            id,
+            header,
+            nodes,
         }
     }
 }
@@ -227,12 +225,11 @@ pub struct NonTerminalMDD<N> {
 }
 
 impl<N> NonTerminalMDD<N> {
-    #[inline]
     pub fn new(id: NodeId, header: NodeHeader, nodes: Box<[N]>) -> Self {
         Self {
-            id: id,
-            header: header,
-            nodes: nodes,
+            id,
+            header,
+            nodes,
         }
     }
 }
@@ -299,11 +296,10 @@ pub struct EvEdge<V,N> {
 }
 
 impl<V,N> EvEdge<V,N> where V: EdgeValue {
-    #[inline]
     pub fn new(value: V, node: N) -> Self {
         Self {
-            value: value,
-            node: node,
+            value,
+            node,
         }
     }
 
@@ -318,3 +314,9 @@ impl<V,N> EvEdge<V,N> where V: EdgeValue {
     }
 }
 
+#[macro_export]
+macro_rules! nodes {
+    ($($elem:expr),*) => {
+        vec![$($elem.clone()),*]
+    };
+}

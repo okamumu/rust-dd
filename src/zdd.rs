@@ -15,21 +15,17 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
-
-use crate::gc::{
-    Gc,
-};
+use crate::dot::Dot;
+use crate::count::Count;
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    NOT,
-    INTERSECT,
-    UNION,
-    SETDIFF,
-    PRODUCT,
+    Not,
+    Intersect,
+    Union,
+    Setdiff,
+    Product,
 }
 
 type Node = ZddNode;
@@ -99,6 +95,12 @@ pub struct Zdd {
     cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
 
+impl Default for Zdd {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Zdd {
     pub fn new() -> Self {
         Self {
@@ -121,15 +123,15 @@ impl Zdd {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err(format!("Did not match the number of edges in header and arguments."))
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err(String::from("Did not match the number of edges in header and arguments."))
+    //     }
+    // }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
+    pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if high == &self.zero {
             return low.clone()
         }
@@ -155,7 +157,7 @@ impl Zdd {
     }
 
     pub fn not(&mut self, f: &Node) -> Node {
-        let key = (Operation::NOT, f.id(), 0);
+        let key = (Operation::Not, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -175,7 +177,7 @@ impl Zdd {
     }
 
     pub fn intersect(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::INTERSECT, f.id(), g.id());
+        let key = (Operation::Intersect, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -208,7 +210,7 @@ impl Zdd {
     }
     
     pub fn union(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::UNION, f.id(), g.id());
+        let key = (Operation::Union, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -241,7 +243,7 @@ impl Zdd {
     }
 
     pub fn setdiff(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::SETDIFF, f.id(), g.id());
+        let key = (Operation::Setdiff, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -274,7 +276,7 @@ impl Zdd {
     }
 
     pub fn product(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::PRODUCT, f.id(), g.id());
+        let key = (Operation::Product, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -322,17 +324,40 @@ impl Gc for Zdd {
         if visited.contains(f) {
             return
         }
-        match f {
-            Node::NonTerminal(fnode) => {
-                let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
-                self.utable.insert(key, f.clone());
-                for x in fnode.iter() {
-                    self.gc_impl(&x, visited);
-                }
-            },
-            _ => (),
-        };
+        if let Node::NonTerminal(fnode) = f {
+            let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
+            self.utable.insert(key, f.clone());
+            for x in fnode.iter() {
+                self.gc_impl(x, visited);
+            }
+        }
         visited.insert(f.clone());
+    }
+}
+
+impl Count for Node {
+    type NodeId = NodeId;
+    type T = u64;
+
+    fn count_edge_impl(&self, visited: &mut HashSet<NodeId>) -> Self::T {
+        let key = self.id();
+        match visited.get(&key) {
+            Some(_) => 0,
+            None => {
+                match self {
+                    Node::NonTerminal(fnode) => {
+                        let tmp0 = fnode[0].count_edge_impl(visited);
+                        let tmp1 = fnode[1].count_edge_impl(visited);
+                        visited.insert(key);
+                        tmp0 + tmp1 + 2
+                    },
+                    Node::One | Node::Zero => {
+                        visited.insert(key);
+                        0
+                    },
+                }
+            }
+        }
     }
 }
 
@@ -346,16 +371,16 @@ impl Dot for Node {
         match self {
             Node::One => {
                 let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
                     if let Node::One | Node::NonTerminal(_) = x {
                         x.dot_impl(io, visited);
                         let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
-                        io.write(s.as_bytes()).unwrap();
+                        io.write_all(s.as_bytes()).unwrap();
                     }
                 }
             },
@@ -442,14 +467,8 @@ mod tests {
         let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.intersect(&x, &y);
 
-        let mut buf = vec![];
-        {
-            let mut io = BufWriter::new(&mut buf);
-            z.dot(&mut io);
-        }
-        let s = std::str::from_utf8(&buf).unwrap();
-        println!("{}", s);
-
+        println!("{:?}", z.count());
+        println!("{}", z.dot_string());
     }
 
     #[test]

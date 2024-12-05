@@ -8,23 +8,6 @@ use std::io::BufWriter;
 
 type Node = BddNode;
 
-fn clock<F>(s: &str, f: F) where F: FnOnce() {
-    let start = std::time::Instant::now();
-    f();
-    let end = start.elapsed();
-    println!("{}: time {}", s, end.as_secs_f64());
-}
-
-// fn dot_print(f: &Node) {
-//     let mut buf = vec![];
-//     {
-//         let mut io = BufWriter::new(&mut buf);
-//         f.dot(&mut io);
-//     }
-//     let s = std::str::from_utf8(&buf).unwrap();
-//     println!("{}", s);
-// }
-
 fn find_minpath(dd: &Bdd, f: &Node, current: usize, minimum: &mut usize,
     path: &mut [usize], pset: &mut Vec<Box<[usize]>>) {
     match f {
@@ -89,6 +72,7 @@ fn make_ft(dd: &mut Bdd, vars: &[Node], x: &[Vec<usize>]) -> Node {
     f
 }
 
+#[test]
 fn bench_ft1 () {
     let mut dd: Bdd = Bdd::new();
     let labels = [0,1,2,3,4,5,6,7];
@@ -169,7 +153,7 @@ fn make_test_data() -> (Vec<usize>, Vec<Vec<usize>>) {
     ];
 	let labels = [13, 19, 2, 14, 29, 23, 3, 26, 25, 7, 9, 27, 12, 30, 17, 24, 8, 4, 18, 5, 20, 21, 28, 1, 16, 10, 15, 6, 11, 22];
     let r = 0.3;
-    let gridn = 1000;
+    let gridn = 100;
 	let ddx = linrange(0.0, 1.0, gridn);
 	let ddy = linrange(0.0, 1.0, gridn);
 	let mut result: Vec<Vec<usize>> = Vec::new();
@@ -189,6 +173,7 @@ fn make_test_data() -> (Vec<usize>, Vec<Vec<usize>>) {
 	(labels.to_vec(), result)
 }
 
+#[test]
 fn bench_ft2() {
     let (labels, data) = make_test_data();
 
@@ -205,9 +190,4 @@ fn bench_ft2() {
 
     dd.gc(&[f.clone()]);
     println!("size {:?}", dd.size());
-}
-
-fn main() {
-    clock("bench ft1", bench_ft1);
-    clock("bench ft2", bench_ft2);
 }

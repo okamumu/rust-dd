@@ -16,21 +16,17 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
-
-use crate::gc::{
-    Gc,
-};
+use crate::dot::Dot;
+use crate::count::Count;
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    NOT,
-    INTERSECT,
-    UNION,
-    SETDIFF,
-    PRODUCT,
+    Not,
+    Intersect,
+    Union,
+    Setdiff,
+    Product,
 }
 
 type Node = ZddMutNode;
@@ -102,6 +98,12 @@ pub struct ZddMut {
     cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
 
+impl Default for ZddMut {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ZddMut {
     pub fn new() -> Self {
         Self {
@@ -124,15 +126,15 @@ impl ZddMut {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err(format!("Did not match the number of edges in header and arguments."))
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err(String::from("Did not match the number of edges in header and arguments."))
+    //     }
+    // }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
+    pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if let Node::Zero = high {
             return low.clone()
         }
@@ -158,7 +160,7 @@ impl ZddMut {
     }
 
     pub fn not(&mut self, f: &Node) -> Node {
-        let key = (Operation::NOT, f.id(), 0);
+        let key = (Operation::Not, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -179,7 +181,7 @@ impl ZddMut {
     }
 
     pub fn intersect(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::INTERSECT, f.id(), g.id());
+        let key = (Operation::Intersect, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -212,7 +214,7 @@ impl ZddMut {
     }
     
     pub fn union(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::UNION, f.id(), g.id());
+        let key = (Operation::Union, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -245,7 +247,7 @@ impl ZddMut {
     }
 
     pub fn setdiff(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::SETDIFF, f.id(), g.id());
+        let key = (Operation::Setdiff, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -278,7 +280,7 @@ impl ZddMut {
     }
 
     pub fn product(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::PRODUCT, f.id(), g.id());
+        let key = (Operation::Product, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -350,19 +352,46 @@ impl Gc for ZddMut {
         if visited.contains(f) {
             return
         }
-        match f {
-            Node::NonTerminal(fnode) => {
-                fnode.borrow_mut().set_id(self.num_nodes);
-                self.num_nodes += 1;
-                let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
-                self.utable.insert(key, f.clone());
-                for x in fnode.borrow().iter() {
-                    self.gc_impl(&x, visited);
-                }
-            },
-            _ => (),
-        };
+        if let Node::NonTerminal(fnode) = f {
+            fnode.borrow_mut().set_id(self.num_nodes);
+            self.num_nodes += 1;
+            let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
+            self.utable.insert(key, f.clone());
+            for x in fnode.borrow().iter() {
+                self.gc_impl(x, visited);
+            }
+        }
         visited.insert(f.clone());
+    }
+}
+
+impl Count for Node {
+    type NodeId = NodeId;
+    type T = u64;
+
+    fn count_edge_impl(&self, visited: &mut HashSet<NodeId>) -> Self::T {
+        let key = self.id();
+        match visited.get(&key) {
+            Some(_) => 0,
+            None => {
+                match self {
+                    Node::NonTerminal(fnode) => {
+                        let mut sum = 0;
+                        for x in fnode.borrow().iter() {
+                            let tmp = x.count_edge_impl(visited);
+                            sum += tmp + 1;
+                        }
+                        visited.insert(key);
+                        sum
+                    },
+                    Node::One | Node::Zero => {
+                        visited.insert(key);
+                        0
+                    },
+                    Node::None => panic!("An edge is not connected to any node.")
+                }
+            }
+        }
     }
 }
 
@@ -376,16 +405,16 @@ impl Dot for Node {
         match self {
             Node::One => {
                 let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.borrow().id(), fnode.borrow().label());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
                 for (i,x) in fnode.borrow().iter().enumerate() {
                     if let Node::One | Node::NonTerminal(_) = x {
                         x.dot_impl(io, visited);
                         let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.borrow().id(), x.id(), i);
-                        io.write(s.as_bytes()).unwrap();
+                        io.write_all(s.as_bytes()).unwrap();
                     }
                 }
             },
@@ -479,7 +508,6 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
-
     }
 
     #[test]
@@ -498,7 +526,6 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
-
     }
 
     #[test]
@@ -517,6 +544,5 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
-
     }
 }

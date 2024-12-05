@@ -105,14 +105,10 @@ mod tests {
     
         fn check(&self) -> CheckResult<Node> {
             let value = self.1;
-            if self.0 < value {
-                CheckResult::Terminal(Node::Zero)
-            } else {
-                if self.0 == value {
-                    CheckResult::Terminal(Node::One)
-                } else {
-                    CheckResult::NonTerminal
-                }
+            match self.0 {
+                _ if self.0 < value => CheckResult::Terminal(Node::Zero),
+                _ if self.0 == value => CheckResult::Terminal(Node::One),
+                _ => CheckResult::NonTerminal,
             }
         }
     
@@ -129,7 +125,7 @@ mod tests {
     fn frontier1() {
         let mut dd = ZddMut::new();
         let s = Combi(5,0);
-        let headers = (0..10).into_iter().map(|i| dd.header(i, &format!("x{}", i))).collect::<Vec<_>>();
+        let headers = (0..10).map(|i| dd.header(i, &format!("x{}", i))).collect::<Vec<_>>();
         let mut f = ZddFrontierBuilder::new(&headers);
         let root = f.build(&s);
 

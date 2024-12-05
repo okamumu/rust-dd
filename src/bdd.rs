@@ -1,3 +1,44 @@
+/// BDD (Binary Decision Diagram) implementation.
+/// 
+/// Description:
+/// 
+/// A BDD is a rooted directed acyclic graph (DAG) with two terminal nodes, 0 and 1.
+/// Each non-terminal node has a level and two edges, low and high.
+/// The level is an integer that represents the variable of the node.
+/// The low and high edges are the child nodes of the node.
+/// 
+/// The BDD has a unique table that stores the non-terminal nodes.
+/// The table is a hash table that maps a tuple of (level, low, high) to a non-terminal node.
+/// 
+/// The BDD has a cache that stores the result of the operations.
+/// The cache is a hash table that maps a tuple of (operation, f, g) to a node.
+/// 
+/// The BDD has the following operations:
+/// - not(f): negation of f
+/// - and(f, g): conjunction of f and g
+/// - or(f, g): disjunction of f and g
+/// - xor(f, g): exclusive or of f and g
+/// - setdiff(f, g): set difference of f and g
+/// - imp(f, g): implication of f and g
+/// - nand(f, g): nand of f and g
+/// - nor(f, g): nor of f and g
+/// - xnor(f, g): exclusive nor of f and g
+/// - ite(f, g, h): if-then-else of f, g, and h
+/// 
+/// The BDD has the following methods:
+/// - header(level, label): create a new header
+/// - node(header, nodes): create a new non-terminal node
+/// - create_node(header, low, high): create a new non-terminal node
+/// - zero(): return the terminal node 0
+/// - one(): return the terminal node 1
+/// - size(): return the number of headers, nodes, and the size of the unique table
+/// 
+/// The BDD has the following traits:
+/// - Gc: garbage collection
+/// - Count: count the number of edges
+/// - Dot: output the graph in DOT format
+/// 
+
 use std::rc::Rc;
 use std::hash::{Hash, Hasher};
 
@@ -16,15 +57,16 @@ use crate::nodes::{
 };
 
 use crate::dot::Dot;
-
+use crate::count::Count;
 use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    NOT,
-    AND,
-    OR,
-    XOR,
+    Not,
+    And,
+    Or,
+    XOr,
+    Setdiff,
 }
 
 type Node = BddNode;
@@ -94,6 +136,12 @@ pub struct Bdd {
     cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
 
+impl Default for Bdd {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bdd {
     pub fn new() -> Self {
         Self {
@@ -116,15 +164,15 @@ impl Bdd {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err(format!("Did not match the number of edges in header and arguments."))
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err("Did not match the number of edges in header and arguments.".to_string())
+    //     }
+    // }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
+    pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if low == high {
             return low.clone()
         }
@@ -150,7 +198,7 @@ impl Bdd {
     }
 
     pub fn not(&mut self, f: &Node) -> Node {
-        let key = (Operation::NOT, f.id(), 0);
+        let key = (Operation::Not, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -170,7 +218,7 @@ impl Bdd {
     }
 
     pub fn and(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::AND, f.id(), g.id());
+        let key = (Operation::And, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -179,6 +227,7 @@ impl Bdd {
                     (Node::One, _) => g.clone(),
                     (_, Node::Zero) => self.zero(),
                     (_, Node::One) => f.clone(),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.and(&fnode[0], g);
                         let high = self.and(&fnode[1], g);
@@ -202,8 +251,39 @@ impl Bdd {
         }
     }
     
+    pub fn and2(&mut self, f: &Node, g: &Node) {
+        let mut tokens = vec![];
+        let mut stack = vec![];
+        let x = (f.clone(), g.clone());
+        stack.push(x);
+        while let Some((f, g)) = stack.pop() {
+            match (&f, &g) {
+                (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
+                    let x = (fnode[0].clone(), g.clone());
+                    stack.push(x);
+                    let x = (fnode[1].clone(), g.clone());
+                    stack.push(x);
+                },
+                (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
+                    let key = (f.clone(), gnode[0].clone());
+                    stack.push(key);
+                    let key = (f.clone(), gnode[1].clone());
+                    stack.push(key);
+                },
+                (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
+                    let key = (fnode[0].clone(), gnode[0].clone());
+                    stack.push(key);
+                    let key = (fnode[1].clone(), gnode[1].clone());
+                    stack.push(key);
+                },
+                _ => (),
+            };
+            tokens.push((f, g));
+        }
+    }
+
     pub fn or(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::OR, f.id(), g.id());
+        let key = (Operation::Or, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -212,6 +292,7 @@ impl Bdd {
                     (Node::One, _) => self.one(),
                     (_, Node::Zero) => f.clone(),
                     (_, Node::One) => self.one(),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f.clone(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.or(&fnode[0], g);
                         let high = self.or(&fnode[1], g);
@@ -236,7 +317,7 @@ impl Bdd {
     }
 
     pub fn xor(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::XOR, f.id(), g.id());
+        let key = (Operation::XOr, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -245,6 +326,7 @@ impl Bdd {
                     (Node::One, _) => self.not(g),
                     (_, Node::Zero) => f.clone(),
                     (_, Node::One) => self.not(f),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => self.zero(),
                     (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
                         let low = self.xor(&fnode[0], g);
                         let high = self.xor(&fnode[1], g);
@@ -268,6 +350,38 @@ impl Bdd {
         }
     }
     
+    pub fn setdiff(&mut self, f: &Node, g: &Node) -> Node {
+        let key = (Operation::Setdiff, f.id(), g.id());
+        match self.cache.get(&key) {
+            Some(x) => x.clone(),
+            None => {
+                let node = match (f, g) {
+                    (Node::Zero, _) => self.zero(),
+                    (_, Node::Zero) => f.clone(),
+                    (_, Node::One) => self.zero(),
+                    (Node::One, _) => self.one(),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => self.zero(),
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
+                        let low = self.setdiff(&fnode[0], g);
+                        let high = self.setdiff(&fnode[1], g);
+                        self.create_node(fnode.header(), &low, &high)
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
+                        self.setdiff(f, &gnode[0])
+                    },
+                    (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
+                        let low = self.setdiff(&fnode[0], &gnode[0]);
+                        let high = self.setdiff(&fnode[1], &gnode[1]);
+                        self.create_node(fnode.header(), &low, &high)
+                    },
+                    _ => panic!("error"),
+                };
+                self.cache.insert(key, node.clone());
+                node
+            }
+        }
+    }
+
     pub fn imp(&mut self, f: &Node, g: &Node) -> Node {
         let tmp = self.not(f);
         self.or(&tmp, g)
@@ -311,17 +425,40 @@ impl Gc for Bdd {
         if visited.contains(f) {
             return
         }
-        match f {
-            Node::NonTerminal(fnode) => {
-                let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
-                self.utable.insert(key, f.clone());
-                for x in fnode.iter() {
-                    self.gc_impl(&x, visited);
-                }
-            },
-            _ => (),
-        };
+        if let Node::NonTerminal(fnode) = f {
+            let key = (fnode.header().id(), fnode[0].id(), fnode[1].id());
+            self.utable.insert(key, f.clone());
+            for x in fnode.iter() {
+                self.gc_impl(x, visited);
+            }
+        }
         visited.insert(f.clone());
+    }
+}
+
+impl Count for Node {
+    type NodeId = NodeId;
+    type T = u64;
+
+    fn count_edge_impl(&self, visited: &mut HashSet<NodeId>) -> Self::T {
+        let key = self.id();
+        match visited.get(&key) {
+            Some(_) => 0,
+            None => {
+                match self {
+                    Node::NonTerminal(fnode) => {
+                        let tmp0 = fnode[0].count_edge_impl(visited);
+                        let tmp1 = fnode[1].count_edge_impl(visited);
+                        visited.insert(key);
+                        tmp0 + tmp1 + 2
+                    },
+                    Node::One | Node::Zero => {
+                        visited.insert(key);
+                        0
+                    },
+                }
+            }
+        }
     }
 }
 
@@ -335,19 +472,19 @@ impl Dot for Node {
         match self {
             Node::Zero => {
                 let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", self.id());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::One => {
                 let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), fnode.label());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
                 for (i,x) in fnode.iter().enumerate() {
                     x.dot_impl(io, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), x.id(), i);
-                    io.write(s.as_bytes()).unwrap();
+                    io.write_all(s.as_bytes()).unwrap();
                 }
             },
         };
@@ -470,15 +607,8 @@ mod tests {
         let y = dd.create_node(&h2, &dd.zero(), &dd.one());
         let z = dd.or(&x, &y);
         let z = dd.not(&z);
-
-        let mut buf = vec![];
-        {
-            let mut io = BufWriter::new(&mut buf);
-            z.dot(&mut io);
-        }
-        let s = std::str::from_utf8(&buf).unwrap();
-        println!("{}", s);
-
+        println!("{:?}", z.count());
+        println!("{}", z.dot_string());
     }
 
     #[test]
@@ -498,6 +628,15 @@ mod tests {
         }
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
+    }
 
+    #[test]
+    fn test_setdiff() {
+        let mut dd: Bdd = Bdd::new();
+        let h1 = NodeHeader::new(0, 0, "x", 2);
+        let h2 = NodeHeader::new(1, 1, "y", 2);
+        let x = dd.create_node(&h1, &dd.zero(), &dd.one());
+        let y = dd.create_node(&h2, &dd.zero(), &dd.one());
+        let _ = dd.setdiff(&x, &y);
     }
 }

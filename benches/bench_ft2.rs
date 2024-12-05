@@ -94,7 +94,7 @@ fn bench_ft1 () {
     let mut dd: Bdd = Bdd::new();
     let labels = [0,1,2,3,4,5,6,7];
     let headers = labels.into_iter().map(|i| dd.header(i, &format!("{}", i))).collect::<Vec<_>>();
-    let vars = labels.into_iter().map(|i| dd.node(&headers[i], &vec![dd.zero(), dd.one()]).unwrap()).collect::<Vec<_>>();
+    let vars = labels.into_iter().map(|i| dd.create_node(&headers[i], &dd.zero(), &dd.one())).collect::<Vec<_>>();
 
     let n = vec![
         vec![2],
@@ -112,7 +112,7 @@ fn bench_ft1 () {
     println!("{:?}", result);
     println!("size {:?}", dd.size());
 
-    dd.gc(&[&f]);
+    dd.gc(&[f.clone()]);
     println!("size {:?}", dd.size());
 
     let mut buf = vec![];
@@ -195,7 +195,7 @@ fn bench_ft2() {
 
     let mut dd: Bdd = Bdd::new();
     let headers = (0..labels.len()).into_iter().map(|i| dd.header(i, &format!("{}", labels[i]))).collect::<Vec<_>>();
-    let vars = (0..labels.len()).into_iter().map(|i| dd.node(&headers[i], &vec![dd.zero(), dd.one()]).unwrap()).collect::<Vec<_>>();
+    let vars = (0..labels.len()).into_iter().map(|i| dd.create_node(&headers[i], &dd.zero(), &dd.one())).collect::<Vec<_>>();
 
     let f = make_ft(&mut dd, &vars, &data);
     println!("size {:?}", dd.size());
@@ -204,7 +204,7 @@ fn bench_ft2() {
     println!("{:?}", result);
     println!("size {:?}", dd.size());
 
-    dd.gc(&[&f]);
+    dd.gc(&[f.clone()]);
     println!("size {:?}", dd.size());
 }
 

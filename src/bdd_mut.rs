@@ -16,20 +16,15 @@ use crate::nodes::{
     NonTerminalBDD,
 };
 
-use crate::dot::{
-    Dot,
-};
-
-use crate::gc::{
-    Gc,
-};
+use crate::dot::Dot;
+use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
-    NOT,
-    AND,
-    OR,
-    XOR,
+    Not,
+    And,
+    Or,
+    XOr,
 }
 
 type Node = BddMutNode;
@@ -101,6 +96,13 @@ pub struct BddMut {
     cache: HashMap<(Operation, NodeId, NodeId), Node>,
 }
 
+impl Default for BddMut {
+
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BddMut {
     const NUM_INITIAL_NODES: NodeId = 3;
 
@@ -125,15 +127,15 @@ impl BddMut {
         h
     }
     
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
-        if nodes.len() == h.edge_num() {
-            Ok(self.create_node(h, &nodes[0], &nodes[1]))
-        } else {
-            Err(format!("Did not match the number of edges in header and arguments."))
-        }
-    }
+    // pub fn node(&mut self, h: &NodeHeader, nodes: &[Node]) -> Result<Node,String> {
+    //     if nodes.len() == h.edge_num() {
+    //         Ok(self.create_node(h, &nodes[0], &nodes[1]))
+    //     } else {
+    //         Err("Did not match the number of edges in header and arguments.".to_string())
+    //     }
+    // }
 
-    fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
+    pub fn create_node(&mut self, h: &NodeHeader, low: &Node, high: &Node) -> Node {
         if low == high {
             return low.clone()
         }
@@ -159,7 +161,7 @@ impl BddMut {
     }
 
     pub fn not(&mut self, f: &Node) -> Node {
-        let key = (Operation::NOT, f.id(), 0);
+        let key = (Operation::Not, f.id(), 0);
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -181,7 +183,7 @@ impl BddMut {
     }
 
     pub fn and(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::AND, f.id(), g.id());
+        let key = (Operation::And, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -214,7 +216,7 @@ impl BddMut {
     }
     
     pub fn or(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::OR, f.id(), g.id());
+        let key = (Operation::Or, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -247,7 +249,7 @@ impl BddMut {
     }
 
     pub fn xor(&mut self, f: &Node, g: &Node) -> Node {
-        let key = (Operation::XOR, f.id(), g.id());
+        let key = (Operation::XOr, f.id(), g.id());
         match self.cache.get(&key) {
             Some(x) => x.clone(),
             None => {
@@ -301,18 +303,15 @@ impl Gc for BddMut {
         if visited.contains(f) {
             return
         }
-        match f {
-            Node::NonTerminal(fnode) => {
-                fnode.borrow_mut().set_id(self.num_nodes);
-                self.num_nodes += 1;
-                let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
-                self.utable.insert(key, f.clone());
-                for x in fnode.borrow().iter() {
-                    self.gc_impl(&x, visited);
-                }
-            },
-            _ => (),
-        };
+        if let Node::NonTerminal(fnode) = f {
+            fnode.borrow_mut().set_id(self.num_nodes);
+            self.num_nodes += 1;
+            let key = (fnode.borrow().header().id(), fnode.borrow()[0].id(), fnode.borrow()[1].id());
+            self.utable.insert(key, f.clone());
+            for x in fnode.borrow().iter() {
+                self.gc_impl(x, visited);
+            }
+        }
         visited.insert(f.clone());
     }
 }
@@ -327,19 +326,19 @@ impl Dot for Node {
         match self {
             Node::Zero => {
                 let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", self.id());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::One => {
                 let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", self.id());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
             },
             Node::NonTerminal(fnode) => {
                 let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.borrow().id(), fnode.borrow().label());
-                io.write(s.as_bytes()).unwrap();
+                io.write_all(s.as_bytes()).unwrap();
                 for (i,x) in fnode.borrow().iter().enumerate() {
                     x.dot_impl(io, visited);
                     let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.borrow().id(), x.id(), i);
-                    io.write(s.as_bytes()).unwrap();
+                    io.write_all(s.as_bytes()).unwrap();
                 }
             },
             _ => (),

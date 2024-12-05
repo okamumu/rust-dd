@@ -1,6 +1,4 @@
-use crate::common::{
-    HashSet,
-};
+use crate::common::HashSet;
 
 pub trait Gc {
     type Node;
@@ -8,7 +6,7 @@ pub trait Gc {
     fn clear_cache(&mut self);
     fn clear_table(&mut self);
 
-    fn gc(&mut self, fs: &[&Self::Node]) {
+    fn gc(&mut self, fs: &[Self::Node]) {
         self.clear_cache();
         self.clear_table();
         let mut visited = HashSet::default();
