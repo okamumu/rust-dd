@@ -15,9 +15,9 @@ use crate::nodes::{
     NonTerminalMDD,
 };
 
-use crate::dot::Dot;
-use crate::count::Count;
-use crate::gc::Gc;
+// use crate::dot::Dot;
+// use crate::count::Count;
+// use crate::gc::Gc;
 
 #[derive(Debug,PartialEq,Eq,Hash)]
 enum Operation {
@@ -27,38 +27,102 @@ enum Operation {
     XOr,
 }
 
-type Node = MddNode;
+#[derive(Debug)]
+pub struct NodeHeader {
+    id: HeaderId,
+    level: Level,
+    label: String,
+    edge_num: usize,
+}
 
-#[derive(Debug,Clone)]
+impl NodeHeader {
+    pub fn new(id: HeaderId, level: Level, label: &str, edge_num: usize) -> Self {
+        Self {
+            id,
+            level,
+            label: label.to_string(),
+            edge_num,
+        }
+    }
+
+    #[inline]
+    pub fn id(&self) -> HeaderId {
+        self.id
+    }
+
+    #[inline]
+    pub fn level(&self) -> Level {
+        self.level
+    }
+
+    #[inline]
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    #[inline]
+    pub fn edge_num(&self) -> usize {
+        self.edge_num
+    }
+}
+
+#[derive(Debug)]
+pub struct NonTerminalMDD {
+    id: NodeId,
+    header: HeaderId,
+    nodes: Box<[NodeId]>,
+}
+
+impl NonTerminalMDD {
+    pub fn new(id: NodeId, header: HeaderId, nodes: Box<[NodeId]>) -> Self {
+        Self {
+            id,
+            header,
+            nodes,
+        }
+    }
+
+    #[inline]
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
+
+    #[inline]
+    pub fn header(&self) -> HeaderId {
+        self.header
+    }
+}
+
+#[derive(Debug)]
 pub enum MddNode {
-    NonTerminal(Rc<NonTerminalMDD<Node>>),
+    NonTerminal(NonTerminalMDD),
     Zero,
     One,
     Undet,
 }
 
-impl PartialEq for Node {
-    fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
-    }
-}
+// impl PartialEq for Node {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.id() == other.id()
+//     }
+// }
 
-impl Eq for Node {}
+// impl Eq for Node {}
 
-impl Hash for Node {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id().hash(state);
-    }
-}
+// impl Hash for Node {
+//     fn hash<H: Hasher>(&self, state: &mut H) {
+//         self.id().hash(state);
+//     }
+// }
 
-impl Node {
-    pub fn new_nonterminal(id: NodeId, header: &NodeHeader, nodes: &[Self]) -> Self {
+impl MddNode {
+    pub fn new_nonterminal(id: NodeId, header: HeaderId, nodes: &[NodeId]) -> Self {
         let x = NonTerminalMDD::new(
             id,
-            header.clone(),
+            header,
             nodes.to_vec().into_boxed_slice(),
         );
-        Self::NonTerminal(Rc::new(x))
+        Self::NonTerminal(x)
     }
     
     pub fn id(&self) -> NodeId {
@@ -70,19 +134,19 @@ impl Node {
         }        
     }
 
-    pub fn header(&self) -> Option<&NodeHeader> {
+    pub fn header(&self) -> Option<HeaderId> {
         match self {
             Self::NonTerminal(x) => Some(x.header()),
             _ => None
         }
     }
 
-    pub fn level(&self) -> Option<Level> {
-        match self {
-            Self::NonTerminal(x) => Some(x.level()),
-            _ => None
-        }
-    }
+    // pub fn level(&self) -> Option<Level> {
+    //     match self {
+    //         Self::NonTerminal(x) => Some(x.level()),
+    //         _ => None
+    //     }
+    // }
 }
 
 #[derive(Debug)]

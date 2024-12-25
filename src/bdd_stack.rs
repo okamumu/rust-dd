@@ -39,7 +39,13 @@
 use std::ops::Index;
 use std::slice::Iter;
 
-use crate::common::*;
+use crate::common::HashMap;
+use crate::common::HashSet;
+use crate::common::HeaderId;
+use crate::common::Level;
+use crate::common::NodeId;
+use crate::common::OperationId;
+
 use crate::nodes::*;
 
 use crate::dot::Dot;
@@ -107,6 +113,8 @@ pub struct BddManager {
     one: NodeId,
     utable: HashMap<(HeaderId, NodeId, NodeId), NodeId>,
     cache: HashMap<(Operation, NodeId, NodeId), NodeId>,
+    // next_stack: Vec<Operation>,
+    // result_stack: Vec<NodeId>,
 }
 
 impl DDForest for BddManager {
@@ -156,6 +164,8 @@ impl BddManager {
         };
         let utable = HashMap::default();
         let cache = HashMap::default();
+        // let next_stack = Vec::default();
+        // let result_stack = Vec::default();
         Self {
             headers,
             nodes,
@@ -163,6 +173,8 @@ impl BddManager {
             one,
             utable,
             cache,
+            // next_stack,
+            // result_stack,
         }
     }
 
@@ -218,8 +230,256 @@ enum Operation {
     And,
     Or,
     XOr,
-    Not,
 }
+
+// #[derive(Debug)]
+// enum Operation {
+//     And(NodeId, NodeId),
+//     Or(NodeId, NodeId),
+//     XOr(NodeId, NodeId),
+//     CreateNode((OperationId, NodeId, NodeId), HeaderId),
+//     Result(NodeId),
+// }
+
+// impl Operation {
+//     fn id(&self) -> OperationId {
+//         match self {
+//             Self::And(_, _) => 0,
+//             Self::Or(_, _) => 1,
+//             Self::XOr(_, _) => 2,
+//             Self::CreateNode(_, _) => 3,
+//             Self::Result(_) => 4,
+//         }
+//     }
+// }
+
+// macro_rules! stack_operations {
+//     ($self:ident, $($op:expr),*) => {{
+//         let ops = [$($op),*];
+//         for op in ops.into_iter().rev() {
+//             $self.next_stack.push(op);
+//         }
+//     }};
+// }
+
+// type OpKey = (OperationId, NodeId, NodeId);
+
+// impl BddManager {
+//     fn apply(&mut self, op: Operation) -> NodeId {
+//         self.next_stack.clear();
+//         self.result_stack.clear();
+//         self.next_stack.push(op);
+//         while let Some(op) = self.next_stack.pop() {
+//             match op {
+//                 Operation::And(f, g) => {
+//                     let key = (op.id(), f, g);
+//                     if let Some(id) = self.cache.get(&key) {
+//                         self.result_stack.push(*id);
+//                         continue;
+//                     }
+//                     self.apply_and(key, f, g);
+//                 }
+//                 Operation::Or(f, g) => {
+//                     let key = (op.id(), f, g);
+//                     if let Some(id) = self.cache.get(&key) {
+//                         self.result_stack.push(*id);
+//                         continue;
+//                     }
+//                     self.apply_or(key, f, g);
+//                 }
+//                 Operation::XOr(f, g) => {
+//                     let key = (op.id(), f, g);
+//                     if let Some(id) = self.cache.get(&key) {
+//                         self.result_stack.push(*id);
+//                         continue;
+//                     }
+//                     self.apply_xor(key, f, g);
+//                 }
+//                 Operation::CreateNode(key, h) => {
+//                     let high = self.result_stack.pop().unwrap();
+//                     let low = self.result_stack.pop().unwrap();
+//                     let result = self.create_node(h, low, high);
+//                     self.cache.insert(key, result);
+//                     self.result_stack.push(result);
+//                 }
+//                 Operation::Result(id) => {
+//                     self.result_stack.push(id);
+//                 }
+//             }
+//         }
+//         debug_assert!(self.result_stack.len() == 1);
+//         self.result_stack.pop().unwrap()
+//     }
+
+//     fn apply_and(&mut self, key: OpKey, f: NodeId, g: NodeId) {
+//         if let (Some(fnode), Some(gnode)) = (self.get_node(f), self.get_node(g)) {
+//             match (fnode, gnode) {
+//                 (Node::Zero, _) => {
+//                     stack_operations!(self, Operation::Result(self.zero()))
+//                 }
+//                 (_, Node::Zero) => {
+//                     stack_operations!(self, Operation::Result(self.zero()))
+//                 }
+//                 (Node::One, _) => {
+//                     stack_operations!(self, Operation::Result(g))
+//                 }
+//                 (_, Node::One) => {
+//                     stack_operations!(self, Operation::Result(f))
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+//                     if fnode.id() == gnode.id() =>
+//                 {
+//                     stack_operations!(self, Operation::Result(f))
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
+//                     if self.level(f) > self.level(g) =>
+//                 {
+//                     stack_operations!(
+//                         self,
+//                         Operation::And(fnode[0], g),
+//                         Operation::And(fnode[1], g),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
+//                     if self.level(f) < self.level(g) =>
+//                 {
+//                     stack_operations!(
+//                         self,
+//                         Operation::And(f, gnode[0]),
+//                         Operation::And(f, gnode[1]),
+//                         Operation::CreateNode(key, gnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
+//                     stack_operations!(
+//                         self,
+//                         Operation::And(fnode[0], gnode[0]),
+//                         Operation::And(fnode[1], gnode[1]),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//             }
+//         }
+//     }
+
+//     fn apply_or(&mut self, key: OpKey, f: NodeId, g: NodeId) {
+//         if let (Some(fnode), Some(gnode)) = (self.get_node(f), self.get_node(g)) {
+//             match (fnode, gnode) {
+//                 (Node::Zero, _) => {
+//                     stack_operations!(self, Operation::Result(g))
+//                 }
+//                 (_, Node::Zero) => {
+//                     stack_operations!(self, Operation::Result(f))
+//                 }
+//                 (Node::One, _) => {
+//                     stack_operations!(self, Operation::Result(self.one()))
+//                 }
+//                 (_, Node::One) => {
+//                     stack_operations!(self, Operation::Result(self.one()))
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+//                     if fnode.id() == gnode.id() =>
+//                 {
+//                     stack_operations!(self, Operation::Result(f))
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
+//                     if self.level(f) > self.level(g) =>
+//                 {
+//                     stack_operations!(
+//                         self,
+//                         Operation::Or(fnode[0], g),
+//                         Operation::Or(fnode[1], g),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
+//                     if self.level(f) < self.level(g) =>
+//                 {
+//                     stack_operations!(
+//                         self,
+//                         Operation::Or(f, gnode[0]),
+//                         Operation::Or(f, gnode[1]),
+//                         Operation::CreateNode(key, gnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
+//                     stack_operations!(
+//                         self,
+//                         Operation::Or(fnode[0], gnode[0]),
+//                         Operation::Or(fnode[1], gnode[1]),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//             }
+//         }
+//     }
+
+//     fn apply_xor(&mut self, key: OpKey, f: NodeId, g: NodeId) {
+//         if let (Some(fnode), Some(gnode)) = (self.get_node(f), self.get_node(g)) {
+//             match (fnode, gnode) {
+//                 (Node::Zero, _) => {
+//                     stack_operations!(self, Operation::Result(g))
+//                 }
+//                 (_, Node::Zero) => {
+//                     stack_operations!(self, Operation::Result(f))
+//                 }
+//                 (Node::One, Node::One) => {
+//                     stack_operations!(self, Operation::Result(self.zero()))
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+//                     if fnode.id() == gnode.id() =>
+//                 {
+//                     stack_operations!(self, Operation::Result(self.zero()))
+//                 }
+//                 (Node::NonTerminal(fnode), Node::One) => {
+//                     stack_operations!(
+//                         self,
+//                         Operation::XOr(fnode[0], self.one()),
+//                         Operation::XOr(fnode[1], self.one()),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//                 (Node::One, Node::NonTerminal(gnode)) => {
+//                     stack_operations!(
+//                         self,
+//                         Operation::XOr(gnode[0], self.one()),
+//                         Operation::XOr(gnode[1], self.one()),
+//                         Operation::CreateNode(key, gnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
+//                     if self.level(f) > self.level(g) =>
+//                 {
+//                     stack_operations!(
+//                         self,
+//                         Operation::XOr(fnode[0], g),
+//                         Operation::XOr(fnode[1], g),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
+//                     if self.level(f) < self.level(g) =>
+//                 {
+//                     stack_operations!(
+//                         self,
+//                         Operation::XOr(f, gnode[0]),
+//                         Operation::XOr(f, gnode[1]),
+//                         Operation::CreateNode(key, gnode.headerid())
+//                     )
+//                 }
+//                 (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
+//                     stack_operations!(
+//                         self,
+//                         Operation::XOr(fnode[0], gnode[0]),
+//                         Operation::XOr(fnode[1], gnode[1]),
+//                         Operation::CreateNode(key, fnode.headerid())
+//                     )
+//                 }
+//             }
+//         }
+//     }
+// }
 
 impl BddManager {
     pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
@@ -265,109 +525,15 @@ impl BddManager {
     }
 
     pub fn or(&mut self, f: NodeId, g: NodeId) -> NodeId {
-        let key = (Operation::Or, f, g);
-        if let Some(x) = self.cache.get(&key) {
-            return *x;
-        }
-        let result = match (self.get_node(f).unwrap(), self.get_node(g).unwrap()) {
-            (Node::Zero, _) => g,
-            (_, Node::Zero) => f,
-            (Node::One, _) => self.one(),
-            (_, Node::One) => self.one(),
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
-            (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
-                if self.level(f) > self.level(g) =>
-            {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let headerid = fnode.headerid();
-                let low = self.or(f0, g);
-                let high = self.or(f1, g);
-                self.create_node(headerid, low, high)
-            }
-            (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
-                if self.level(f) < self.level(g) =>
-            {
-                let (g0, g1) = (gnode[0], gnode[1]);
-                let headerid = gnode.headerid();
-                let low = self.or(f, g0);
-                let high = self.or(f, g1);
-                self.create_node(headerid, low, high)
-            }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
-                let headerid = fnode.headerid();
-                let low = self.or(f0, g0);
-                let high = self.or(f1, g1);
-                self.create_node(headerid, low, high)
-            }
-        };
-        self.cache.insert(key, result);
-        result
+        self.apply(Operation::Or(f, g))
     }
 
     pub fn xor(&mut self, f: NodeId, g: NodeId) -> NodeId {
-        let key = (Operation::XOr, f, g);
-        if let Some(x) = self.cache.get(&key) {
-            return *x;
-        }
-        let result = match (self.get_node(f).unwrap(), self.get_node(g).unwrap()) {
-            (Node::Zero, _) => g,
-            (_, Node::Zero) => f,
-            (Node::One, _) => self.not(g),
-            (_, Node::One) => self.not(f),
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => {
-                self.zero()
-            }
-            (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
-                if self.level(f) > self.level(g) =>
-            {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let headerid = fnode.headerid();
-                let low = self.xor(f0, g);
-                let high = self.xor(f1, g);
-                self.create_node(headerid, low, high)
-            }
-            (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
-                if self.level(f) < self.level(g) =>
-            {
-                let (g0, g1) = (gnode[0], gnode[1]);
-                let headerid = gnode.headerid();
-                let low = self.xor(f, g0);
-                let high = self.xor(f, g1);
-                self.create_node(headerid, low, high)
-            }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
-                let headerid = fnode.headerid();
-                let low = self.xor(f0, g0);
-                let high = self.xor(f1, g1);
-                self.create_node(headerid, low, high)
-            }
-        };
-        self.cache.insert(key, result);
-        result
+        self.apply(Operation::XOr(f, g))
     }
 
     pub fn not(&mut self, f: NodeId) -> NodeId {
-        let key = (Operation::Not, f, 0);
-        if let Some(x) = self.cache.get(&key) {
-            return *x;
-        }
-        let result = match self.get_node(f).unwrap() {
-            Node::Zero => self.one(),
-            Node::One => self.zero(),
-            Node::NonTerminal(fnode) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let headerid = fnode.headerid();
-                let low = self.not(f0);
-                let high = self.not(f1);
-                self.create_node(headerid, low, high)
-            }
-        };
-        self.cache.insert(key, result);
-        result
+        self.xor(f, self.one())
     }
 
     pub fn imp(&mut self, f: NodeId, g: NodeId) -> NodeId {

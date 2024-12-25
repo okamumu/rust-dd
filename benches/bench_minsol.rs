@@ -1,16 +1,10 @@
-use dd::common::{
-    HeaderId,
-    NodeId,
-    Level,
-    HashSet,
-    HashMap,
-};
+use dd::common::{HashMap, HashSet, HeaderId, Level, NodeId};
 // use dd::common::*;
-use dd::nodes::*;
 use dd::bdd::*;
-use dd::dot::*;
 use dd::count::*;
+use dd::dot::*;
 use dd::gc::*;
+use dd::nodes::*;
 
 use std::hash::Hash;
 
@@ -100,21 +94,19 @@ fn ftkofn(dd: &mut Bdd, k: usize, nodes: &[Node]) -> Node {
     match k {
         k if k == 1 => ftor(dd, nodes),
         k if k == n => ftand(dd, nodes),
-        _ => {
-            match nodes {
-                [rest @ .., v] => {
-                    let x = ftkofn(dd, k-1, rest);
-                    let y = ftkofn(dd, k, rest);
-                    dd.ite(v, &x, &y)
-                },
-                [] => panic!("error"),
+        _ => match nodes {
+            [rest @ .., v] => {
+                let x = ftkofn(dd, k - 1, rest);
+                let y = ftkofn(dd, k, rest);
+                dd.ite(v, &x, &y)
             }
+            [] => panic!("error"),
         },
     }
 }
 
 fn mcsbdd(dd: &mut Bdd, f: &Node) -> Node {
-    let mut cache: HashMap<NodeId,Node>  = HashMap::default();
+    let mut cache: HashMap<NodeId, Node> = HashMap::default();
     minsol(dd, f, &mut cache)
 }
 
@@ -125,7 +117,7 @@ fn mcsvec(dd: &Bdd, f: &Node) -> Vec<Box<[usize]>> {
     pset
 }
 
-fn minsol(dd: &mut Bdd, f: &Node, cache: &mut HashMap<NodeId,Node>) -> Node {
+fn minsol(dd: &mut Bdd, f: &Node, cache: &mut HashMap<NodeId, Node>) -> Node {
     let key = f.id();
     match cache.get(&key) {
         Some(x) => x.clone(),
@@ -137,7 +129,7 @@ fn minsol(dd: &mut Bdd, f: &Node, cache: &mut HashMap<NodeId,Node>) -> Node {
                     let high = dd.setdiff(&tmp, &fnode[0]);
                     let low = minsol(dd, &fnode[0], cache);
                     dd.create_node(fnode.header(), &low, &high)
-                },
+                }
             };
             cache.insert(key, node.clone());
             node
@@ -149,18 +141,18 @@ fn extract(dd: &Bdd, f: &Node, path: &mut Vec<usize>, pset: &mut Vec<Box<[usize]
     match f {
         Node::One => {
             pset.push(path.to_vec().into_boxed_slice());
-        },
+        }
         Node::NonTerminal(fnode) => {
             extract(dd, &fnode[0], path, pset);
             path.push(fnode.level());
             extract(dd, &fnode[1], path, pset);
             path.pop();
-        },
+        }
         _ => (),
     }
 }
 
-fn critical(dd: &mut Bdd, f: &Node, level: Level, cache: &mut HashMap<NodeId,Node>) -> Node {
+fn critical(dd: &mut Bdd, f: &Node, level: Level, cache: &mut HashMap<NodeId, Node>) -> Node {
     let key = f.id();
     match cache.get(&key) {
         Some(x) => x.clone(),
@@ -168,16 +160,12 @@ fn critical(dd: &mut Bdd, f: &Node, level: Level, cache: &mut HashMap<NodeId,Nod
             let node = match f {
                 Node::Zero | Node::One => dd.zero(),
                 Node::NonTerminal(fnode) if fnode.level() > level => {
-                        let low = critical(dd, &fnode[0], level, cache);
-                        let high = critical(dd, &fnode[1], level, cache);
-                        dd.create_node(fnode.header(), &low, &high)
-                },
-                Node::NonTerminal(fnode) if fnode.level() == level => {
-                    dd.xor(&fnode[0], &fnode[1])
-                },
-                Node::NonTerminal(fnode) if fnode.level() < level => {
-                    dd.zero()
-                },
+                    let low = critical(dd, &fnode[0], level, cache);
+                    let high = critical(dd, &fnode[1], level, cache);
+                    dd.create_node(fnode.header(), &low, &high)
+                }
+                Node::NonTerminal(fnode) if fnode.level() == level => dd.xor(&fnode[0], &fnode[1]),
+                Node::NonTerminal(fnode) if fnode.level() < level => dd.zero(),
                 _ => panic!("error"),
             };
             cache.insert(key, node.clone());
@@ -187,23 +175,33 @@ fn critical(dd: &mut Bdd, f: &Node, level: Level, cache: &mut HashMap<NodeId,Nod
 }
 
 fn criticalbdd(dd: &mut Bdd, f: &Node, level: Level) -> Node {
-    let mut cache: HashMap<NodeId,Node>  = HashMap::default();
+    let mut cache: HashMap<NodeId, Node> = HashMap::default();
     critical(dd, f, level, &mut cache)
 }
 
-fn generate_vars<T>(dd: &mut Bdd, labels: &[T]) -> HashMap<T,Node> where T: Display + Eq + Hash + Clone {
-    let headers: Vec<_> = labels.iter()
+fn generate_vars<T>(dd: &mut Bdd, labels: &[T]) -> HashMap<T, Node>
+where
+    T: Display + Eq + Hash + Clone,
+{
+    let headers: Vec<_> = labels
+        .iter()
         .enumerate()
-        .map(|(i,x)| dd.header(i, &format!("{}", x)))
+        .map(|(i, x)| dd.header(i, &format!("{}", x)))
         .collect();
-    let result: HashMap<T,_> = labels.iter()
+    let result: HashMap<T, _> = labels
+        .iter()
         .enumerate()
-        .map(|(i, x)| (x.clone(), dd.create_node(&headers[i], &dd.zero(), &dd.one())))
+        .map(|(i, x)| {
+            (
+                x.clone(),
+                dd.create_node(&headers[i], &dd.zero(), &dd.one()),
+            )
+        })
         .collect();
     result
 }
 
-fn bench_ft3 () {
+fn bench_ft3() {
     let mut dd: Bdd = Bdd::new();
 
     let f = clock!("Create BDD", {
@@ -225,7 +223,11 @@ fn bench_ft3 () {
 }
 
 fn make_benchft(dd: &mut Bdd) -> Node {
-    let labels = [1,6,34,8,35,7,36,9,37,38,39,40,41,30,32,46,48,50,31,33,47,49,51,53,2,10,3,11,4,12,5,13,14,15,16,17,18,19,20,21,52,42,44,22,23,24,25,26,27,28,29,54,58,43,45,55,59,56,60,57,61];
+    let labels = [
+        1, 6, 34, 8, 35, 7, 36, 9, 37, 38, 39, 40, 41, 30, 32, 46, 48, 50, 31, 33, 47, 49, 51, 53,
+        2, 10, 3, 11, 4, 12, 5, 13, 14, 15, 16, 17, 18, 19, 20, 21, 52, 42, 44, 22, 23, 24, 25, 26,
+        27, 28, 29, 54, 58, 43, 45, 55, 59, 56, 60, 57, 61,
+    ];
     let c = generate_vars(dd, &labels);
 
     let g62 = ftand!(dd, c[&1], c[&2]);
@@ -325,13 +327,14 @@ fn make_benchf2(dd: &mut Bdd, labels: &[&str]) -> Node {
     top
 }
 
-fn bench_ft4 () {
+fn bench_ft4() {
     let mut dd: Bdd = Bdd::new();
 
     let labels = ["a", "b", "c", "d", "e"];
-    let headers: HashMap<_,_> = labels.iter()
+    let headers: HashMap<_, _> = labels
+        .iter()
         .enumerate()
-        .map(|(i,x)| (x, dd.header(i, &format!("{}", x))))
+        .map(|(i, x)| (x, dd.header(i, &format!("{}", x))))
         .collect();
     let a = dd.create_node(&headers[&"a"], &dd.zero(), &dd.one());
     let b = dd.create_node(&headers[&"b"], &dd.zero(), &dd.one());
@@ -366,10 +369,6 @@ fn bench_ft4 () {
 }
 
 fn main() {
-    clock!("Total", {
-        bench_ft3()
-    });
-    clock!("Total", {
-        bench_ft4()
-    });
+    clock!("Total", { bench_ft3() });
+    clock!("Total", { bench_ft4() });
 }

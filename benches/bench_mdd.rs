@@ -9,23 +9,32 @@ use dd::mdd::*;
 // use dd::dot::Dot;
 use dd::gc::Gc;
 
-fn clock<F>(s: &str, f: F) where F: FnOnce() {
+fn clock<F>(s: &str, f: F)
+where
+    F: FnOnce(),
+{
     let start = std::time::Instant::now();
     f();
     let end = start.elapsed();
     println!("{}: time {}", s, end.as_secs_f64());
 }
 
-fn bench_mdd1 () {
+fn bench_mdd1() {
     let n = 1000;
     let mut f: Mdd = Mdd::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
-        let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i), 5)).collect::<Vec<_>>();
-        let x = (0..n).into_iter().map(|i| f.node(&h[i], &v).unwrap()).collect::<Vec<_>>();
-    
-        clock("-bench mdd1-1", ||{
+        let h = (0..n)
+            .into_iter()
+            .map(|i| f.header(i, &format!("x{}", i), 5))
+            .collect::<Vec<_>>();
+        let x = (0..n)
+            .into_iter()
+            .map(|i| f.node(&h[i], &v).unwrap())
+            .collect::<Vec<_>>();
+
+        clock("-bench mdd1-1", || {
             for i in x.into_iter() {
                 b = f.and(&b, &i);
             }
@@ -34,16 +43,22 @@ fn bench_mdd1 () {
     }
 }
 
-fn bench_mdd2 () {
+fn bench_mdd2() {
     let n = 1000;
     let mut f: Mdd = Mdd::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
-        let h = (0..n).into_iter().map(|i| f.header(i, &format!("x{}", i), 5)).collect::<Vec<_>>();
-        let x = (0..n).into_iter().map(|i| f.node(&h[i], &v).unwrap()).collect::<Vec<_>>();
-    
-        clock("-bench mdd2", ||{
+        let h = (0..n)
+            .into_iter()
+            .map(|i| f.header(i, &format!("x{}", i), 5))
+            .collect::<Vec<_>>();
+        let x = (0..n)
+            .into_iter()
+            .map(|i| f.node(&h[i], &v).unwrap())
+            .collect::<Vec<_>>();
+
+        clock("-bench mdd2", || {
             for i in (0..n).rev() {
                 b = f.and(&b, &x[i]);
             }
@@ -51,7 +66,7 @@ fn bench_mdd2 () {
         println!("-mdd3 node {:?}", f.size());
     }
     {
-        clock("-bench mdd2", ||{
+        clock("-bench mdd2", || {
             f.clear_cache();
             f.gc(&vec![b.clone()]);
         });
@@ -59,7 +74,7 @@ fn bench_mdd2 () {
     }
 }
 
-fn bench_mdd3 () {
+fn bench_mdd3() {
     // let data = [
     //     vec![2, 1, 0],
     //     vec![1, 0, 1],
