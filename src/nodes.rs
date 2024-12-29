@@ -126,29 +126,29 @@ pub trait DDForest {
     fn level(&self, id: NodeId) -> Option<Level>;
 }
 
-#[derive(Debug)]
-pub struct TerminalNumber<Value> {
-    id: NodeId,
-    value: Value,
-}
+// #[derive(Debug)]
+// pub struct TerminalNumber<Value> {
+//     id: NodeId,
+//     value: Value,
+// }
 
-impl<Value> TerminalNumber<Value> {
-    pub fn new(id: NodeId, value: Value) -> Self {
-        Self { id, value }
-    }
-}
+// impl<Value> TerminalNumber<Value> {
+//     pub fn new(id: NodeId, value: Value) -> Self {
+//         Self { id, value }
+//     }
+// }
 
-impl<Value> Terminal for TerminalNumber<Value>
-where
-    Value: TerminalNumberValue,
-{
-    type Value = Value;
+// impl<Value> Terminal for TerminalNumber<Value>
+// where
+//     Value: TerminalNumberValue,
+// {
+//     type Value = Value;
 
-    #[inline]
-    fn value(&self) -> Self::Value {
-        self.value
-    }
-}
+//     #[inline]
+//     fn value(&self) -> Self::Value {
+//         self.value
+//     }
+// }
 
 // #[derive(Debug)]
 // pub struct NonTerminalBDD<N> {

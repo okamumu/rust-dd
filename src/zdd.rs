@@ -175,7 +175,7 @@ impl ZddManager {
 
     pub fn create_header(&mut self, level: Level, label: &str) -> HeaderId {
         let id = self.headers.len();
-        let tmp= NodeHeader::new(id, level, label, 2);
+        let tmp = NodeHeader::new(id, level, label, 2);
         self.headers.push(tmp);
         debug_assert!(id == self.headers[id].id());
         id

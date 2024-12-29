@@ -1,14 +1,8 @@
+use std::hash::{Hash, Hasher};
 use std::ops::Index;
 use std::slice::Iter;
-use std::hash::{Hash, Hasher};
 
-use crate::common::{
-    HeaderId,
-    NodeId,
-    Level,
-    HashMap,
-    HashSet,
-};
+use crate::common::{HashMap, HashSet, HeaderId, Level, NodeId};
 
 use crate::dot::Dot;
 use crate::nodes::*;
@@ -69,13 +63,13 @@ impl Node {
             Self::Zero => 0,
             Self::One => 1,
             Self::Undet => 2,
-        }        
+        }
     }
 
     pub fn headerid(&self) -> Option<HeaderId> {
         match self {
             Self::NonTerminal(x) => Some(x.headerid()),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -117,7 +111,7 @@ impl DDForest for MddManager {
             Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.label()),
             Node::Zero | Node::One | Node::Undet => None,
         })
-    }    
+    }
 }
 
 impl MddManager {
@@ -176,11 +170,11 @@ impl MddManager {
 
     pub fn create_node(&mut self, header: HeaderId, nodes: &[NodeId]) -> NodeId {
         if nodes.iter().all(|x| &nodes[0] == x) {
-            return nodes[0].clone()
+            return nodes[0].clone();
         }
         let key = (header, nodes.to_vec().into_boxed_slice());
-        if let Some(nodeid) = self.utable.get(&key) {
-            return *nodeid
+        if let Some(&nodeid) = self.utable.get(&key) {
+            return nodeid;
         }
         let node = self.new_nonterminal(header, nodes);
         self.utable.insert(key, node);
@@ -188,15 +182,15 @@ impl MddManager {
     }
 
     #[inline]
-    pub fn size(&self) -> (HeaderId, NodeId, usize) {
+    pub fn size(&self) -> (usize, usize, usize) {
         (self.headers.len(), self.nodes.len(), self.cache.len())
     }
-   
+
     #[inline]
     pub fn zero(&self) -> NodeId {
         self.zero
     }
-    
+
     #[inline]
     pub fn one(&self) -> NodeId {
         self.one
@@ -208,7 +202,7 @@ impl MddManager {
     }
 }
 
-#[derive(Debug,PartialEq,Eq,Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 enum Operation {
     Not,
     And,
@@ -220,7 +214,7 @@ impl MddManager {
     pub fn not(&mut self, f: NodeId) -> NodeId {
         let key = (Operation::Not, f, 0);
         if let Some(&nodeid) = self.cache.get(&key) {
-            return nodeid
+            return nodeid;
         }
         let node = match self.get_node(f).unwrap() {
             Node::Undet => self.undet(),
@@ -231,7 +225,7 @@ impl MddManager {
                 let nodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = nodeid.iter().map(|&f| self.not(f)).collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
         };
         self.cache.insert(key, node);
         node
@@ -240,7 +234,7 @@ impl MddManager {
     pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (Operation::And, f, g);
         if let Some(&nodeid) = self.cache.get(&key) {
-            return nodeid
+            return nodeid;
         }
         let node = match (self.get_node(f).unwrap(), self.get_node(g).unwrap()) {
             (Node::Undet, _) => self.undet(),
@@ -250,25 +244,33 @@ impl MddManager {
             (_, Node::Zero) => self.zero(),
             (_, Node::One) => f,
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if self.level(f) > self.level(g) => {
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+                if self.level(f) > self.level(g) =>
+            {
                 let headerid = fnode.headerid();
                 let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.and(f, g)).collect();
                 self.create_node(headerid, &nodes)
-            },
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if self.level(f) < self.level(g) => {
+            }
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+                if self.level(f) < self.level(g) =>
+            {
                 let headerid = gnode.headerid();
                 let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.and(f, g)).collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
                 let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
-                let nodes: Vec<NodeId> = fnodeid.iter().zip(gnodeid.iter()).map(|(&f,&g)| self.and(f, g)).collect();
+                let nodes: Vec<NodeId> = fnodeid
+                    .iter()
+                    .zip(gnodeid.iter())
+                    .map(|(&f, &g)| self.and(f, g))
+                    .collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
         };
         self.cache.insert(key, node);
         node
@@ -277,7 +279,7 @@ impl MddManager {
     pub fn or(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (Operation::Or, f, g);
         if let Some(&nodeid) = self.cache.get(&key) {
-            return nodeid
+            return nodeid;
         }
         let node = match (self.get_node(f).unwrap(), self.get_node(g).unwrap()) {
             (Node::Undet, _) => self.undet(),
@@ -287,25 +289,33 @@ impl MddManager {
             (_, Node::Zero) => f,
             (_, Node::One) => self.one(),
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if self.level(f) > self.level(g) => {
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+                if self.level(f) > self.level(g) =>
+            {
                 let headerid = fnode.headerid();
                 let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.or(f, g)).collect();
                 self.create_node(headerid, &nodes)
-            },
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if self.level(f) < self.level(g) => {
+            }
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+                if self.level(f) < self.level(g) =>
+            {
                 let headerid = gnode.headerid();
                 let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.or(f, g)).collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
                 let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
-                let nodes: Vec<NodeId> = fnodeid.iter().zip(gnodeid.iter()).map(|(&f,&g)| self.or(f, g)).collect();
+                let nodes: Vec<NodeId> = fnodeid
+                    .iter()
+                    .zip(gnodeid.iter())
+                    .map(|(&f, &g)| self.or(f, g))
+                    .collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
         };
         self.cache.insert(key, node);
         node
@@ -314,7 +324,7 @@ impl MddManager {
     pub fn xor(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (Operation::XOr, f, g);
         if let Some(&nodeid) = self.cache.get(&key) {
-            return nodeid
+            return nodeid;
         }
         let node = match (self.get_node(f).unwrap(), self.get_node(g).unwrap()) {
             (Node::Undet, _) => self.undet(),
@@ -323,26 +333,36 @@ impl MddManager {
             (Node::One, _) => self.not(g),
             (_, Node::Zero) => f,
             (_, Node::One) => self.not(f),
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => self.zero(),
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if self.level(f) > self.level(g) => {
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => {
+                self.zero()
+            }
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+                if self.level(f) > self.level(g) =>
+            {
                 let headerid = fnode.headerid();
                 let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.xor(f, g)).collect();
                 self.create_node(headerid, &nodes)
-            },
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if self.level(f) < self.level(g) => {
+            }
+            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+                if self.level(f) < self.level(g) =>
+            {
                 let headerid = gnode.headerid();
                 let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.xor(f, g)).collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
                 let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
                 let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
-                let nodes: Vec<NodeId> = fnodeid.iter().zip(gnodeid.iter()).map(|(&f,&g)| self.xor(f, g)).collect();
+                let nodes: Vec<NodeId> = fnodeid
+                    .iter()
+                    .zip(gnodeid.iter())
+                    .map(|(&f, &g)| self.xor(f, g))
+                    .collect();
                 self.create_node(headerid, &nodes)
-            },
+            }
         };
         self.cache.insert(key, node);
         node
@@ -382,11 +402,11 @@ impl MddManager {
 //     fn clear_cache(&mut self) {
 //         self.cache.clear();
 //     }
-    
+
 //     fn clear_table(&mut self) {
 //         self.utable.clear();
 //     }
-    
+
 //     fn gc_impl(&mut self, f: &Self::Node, visited: &mut HashSet<Self::Node>) {
 //         if visited.contains(f) {
 //             return
@@ -412,7 +432,7 @@ impl MddManager {
     fn count_edge_impl(&self, node: NodeId, visited: &mut HashSet<NodeId>) -> (u64, u64) {
         let key = node;
         if let Some(_) = visited.get(&key) {
-            return (0, 0)
+            return (0, 0);
         }
         match self.get_node(node).unwrap() {
             Node::NonTerminal(fnode) => {
@@ -425,17 +445,20 @@ impl MddManager {
                 }
                 visited.insert(key);
                 result
-            },
+            }
             Node::One | Node::Zero | Node::Undet => {
                 visited.insert(key);
                 (1, 0)
-            },
+            }
         }
     }
 }
 
 impl Dot for MddManager {
-    fn dot_impl<T>(&self, io: &mut T, id: NodeId, visited: &mut HashSet<NodeId>) where T: std::io::Write {
+    fn dot_impl<T>(&self, io: &mut T, id: NodeId, visited: &mut HashSet<NodeId>)
+    where
+        T: std::io::Write,
+    {
         if visited.contains(&id) {
             return;
         }
@@ -444,23 +467,34 @@ impl Dot for MddManager {
             Node::Zero => {
                 let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", id);
                 io.write_all(s.as_bytes()).unwrap();
-            },
+            }
             Node::One => {
                 let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", id);
                 io.write_all(s.as_bytes()).unwrap();
-            },
+            }
             Node::NonTerminal(fnode) => {
-                let s = format!("\"obj{}\" [shape=circle, label=\"{}\"];\n", fnode.id(), self.label(id).unwrap());
+                let s = format!(
+                    "\"obj{}\" [shape=circle, label=\"{}\"];\n",
+                    fnode.id(),
+                    self.label(id).unwrap()
+                );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, &xid) in fnode.iter().enumerate() {
-                    if let Node::Zero | Node::One | Node::NonTerminal(_) = self.get_node(xid).unwrap() {
+                    if let Node::Zero | Node::One | Node::NonTerminal(_) =
+                        self.get_node(xid).unwrap()
+                    {
                         self.dot_impl(io, xid, visited);
-                        let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", fnode.id(), xid, i);
+                        let s = format!(
+                            "\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n",
+                            fnode.id(),
+                            xid,
+                            i
+                        );
                         io.write_all(s.as_bytes()).unwrap();
                     }
                 }
-            },
-            _ => ()
+            }
+            _ => (),
         };
         visited.insert(id);
     }
@@ -545,4 +579,14 @@ mod tests {
         println!("{}", dd.dot_string(z));
     }
 
+    #[test]
+    fn test_count() {
+        let mut dd = MddManager::new();
+        let h1 = dd.create_header(0, "x", 3);
+        let h2 = dd.create_header(1, "y", 3);
+        let x = dd.create_node(h1, &[dd.zero(), dd.zero(), dd.one()]);
+        let y = dd.create_node(h2, &[dd.zero(), dd.one(), dd.one()]);
+        let z = dd.ite(x, y, dd.one());
+        println!("{:?}", dd.count(z));
+    }
 }
