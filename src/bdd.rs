@@ -146,11 +146,13 @@ impl BddManager {
             let zeronode = Node::Zero;
             let id = zeronode.id();
             nodes.push(zeronode);
+            debug_assert!(id == nodes[id].id());
             id
         };
         let one = {
             let onenode = Node::One;
             let id = onenode.id();
+            debug_assert!(id == nodes[id].id());
             nodes.push(onenode);
             id
         };
@@ -174,6 +176,7 @@ impl BddManager {
             edges: [low, high],
         });
         self.nodes.push(node);
+        debug_assert!(id == self.nodes[id].id());
         id
     }
 
@@ -181,6 +184,7 @@ impl BddManager {
         let headerid = self.headers.len();
         let header = NodeHeader::new(headerid, level, label, 2);
         self.headers.push(header);
+        debug_assert!(headerid == self.headers[headerid].id());
         headerid
     }
 
@@ -222,6 +226,26 @@ enum Operation {
 }
 
 impl BddManager {
+    pub fn not(&mut self, f: NodeId) -> NodeId {
+        let key = (Operation::Not, f, 0);
+        if let Some(x) = self.cache.get(&key) {
+            return *x;
+        }
+        let result = match self.get_node(f).unwrap() {
+            Node::Zero => self.one(),
+            Node::One => self.zero(),
+            Node::NonTerminal(fnode) => {
+                let (f0, f1) = (fnode[0], fnode[1]);
+                let headerid = fnode.headerid();
+                let low = self.not(f0);
+                let high = self.not(f1);
+                self.create_node(headerid, low, high)
+            }
+        };
+        self.cache.insert(key, result);
+        result
+    }
+
     pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (Operation::And, f, g);
         if let Some(x) = self.cache.get(&key) {
@@ -343,26 +367,6 @@ impl BddManager {
                 let headerid = fnode.headerid();
                 let low = self.xor(f0, g0);
                 let high = self.xor(f1, g1);
-                self.create_node(headerid, low, high)
-            }
-        };
-        self.cache.insert(key, result);
-        result
-    }
-
-    pub fn not(&mut self, f: NodeId) -> NodeId {
-        let key = (Operation::Not, f, 0);
-        if let Some(x) = self.cache.get(&key) {
-            return *x;
-        }
-        let result = match self.get_node(f).unwrap() {
-            Node::Zero => self.one(),
-            Node::One => self.zero(),
-            Node::NonTerminal(fnode) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let headerid = fnode.headerid();
-                let low = self.not(f0);
-                let high = self.not(f1);
                 self.create_node(headerid, low, high)
             }
         };

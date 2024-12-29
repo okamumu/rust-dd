@@ -127,12 +127,27 @@ impl ZddManager {
     pub fn new() -> Self {
         let headers = Vec::default();
         let mut nodes = Vec::default();
-        nodes.push(Node::Zero);
-        nodes.push(Node::One);
-        nodes.push(Node::Undet);
-        let zero = nodes[0].id();
-        let one = nodes[1].id();
-        let undet = nodes[2].id();
+        let zero = {
+            let tmp = Node::Zero;
+            let id = tmp.id();
+            nodes.push(tmp);
+            debug_assert!(id == nodes[id].id());
+            id
+        };
+        let one = {
+            let tmp = Node::One;
+            let id = tmp.id();
+            nodes.push(tmp);
+            debug_assert!(id == nodes[id].id());
+            id
+        };
+        let undet = {
+            let tmp = Node::Undet;
+            let id = tmp.id();
+            nodes.push(tmp);
+            debug_assert!(id == nodes[id].id());
+            id
+        };
         let utable = HashMap::default();
         let cache = HashMap::default();
         Self {
@@ -154,14 +169,16 @@ impl ZddManager {
             edges: [low, high],
         });
         self.nodes.push(node);
+        debug_assert!(id == self.nodes[id].id());
         id
     }
 
     pub fn create_header(&mut self, level: Level, label: &str) -> HeaderId {
-        let headerid = self.headers.len();
-        let header = NodeHeader::new(headerid, level, label, 2);
-        self.headers.push(header);
-        headerid
+        let id = self.headers.len();
+        let tmp= NodeHeader::new(id, level, label, 2);
+        self.headers.push(tmp);
+        debug_assert!(id == self.headers[id].id());
+        id
     }
 
     pub fn create_node(&mut self, header: HeaderId, low: NodeId, high: NodeId) -> NodeId {
@@ -178,7 +195,7 @@ impl ZddManager {
     }
 
     pub fn size(&self) -> (HeaderId, NodeId, usize) {
-        (self.headers.len(), self.nodes.len(), self.utable.len())
+        (self.headers.len(), self.nodes.len(), self.cache.len())
     }
 
     #[inline]
