@@ -9,9 +9,9 @@ pub mod zdd;
 
 pub mod mdd;
 pub mod mtmdd;
-// pub mod evplus_mdd;
+pub mod mtmdd2;
 
-// pub mod mtmdd2;
+// pub mod evplus_mdd;
 
 // sample for BDD with NodeId
 // pub mod bdd2;

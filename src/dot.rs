@@ -2,7 +2,9 @@ use crate::common::{HashSet, NodeId};
 use std::io::BufWriter;
 
 pub trait Dot {
-    fn dot<T>(&self, io: &mut T, node: NodeId)
+    type Node;
+
+    fn dot<T>(&self, io: &mut T, node: Self::Node)
     where
         T: std::io::Write,
     {
@@ -14,7 +16,7 @@ pub trait Dot {
         io.write_all(s2.as_bytes()).unwrap();
     }
 
-    fn dot_string(&self, node: NodeId) -> String {
+    fn dot_string(&self, node: Self::Node) -> String {
         let mut buf = vec![];
         {
             let mut io = BufWriter::new(&mut buf);
@@ -23,7 +25,7 @@ pub trait Dot {
         std::str::from_utf8(&buf).unwrap().to_string()
     }
 
-    fn dot_impl<T>(&self, io: &mut T, node: NodeId, visited: &mut HashSet<NodeId>)
+    fn dot_impl<T>(&self, io: &mut T, node: Self::Node, visited: &mut HashSet<NodeId>)
     where
         T: std::io::Write;
 }

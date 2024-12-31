@@ -403,6 +403,8 @@ impl BddManager {
 }
 
 impl Dot for BddManager {
+    type Node = NodeId;
+
     fn dot_impl<T>(&self, io: &mut T, id: NodeId, visited: &mut HashSet<NodeId>)
     where
         T: std::io::Write,

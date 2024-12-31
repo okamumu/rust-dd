@@ -1,689 +1,506 @@
-use std::collections::VecDeque;
-use std::hash::{Hash, Hasher};
+use core::panic;
+use std::hash::Hash;
 
-use crate::common::{
-    HeaderId,
-    NodeId,
-    Level,
-    HashMap,
-    HashSet,
-    TerminalNumberValue,
-};
+use crate::common::{HashMap, HashSet, HeaderId, Level, NodeId, TerminalNumberValue};
 
-use crate::nodes::{
-    NodeHeader,
-    Terminal,
-    NonTerminal,
-};
+use crate::nodes::*;
 
-use crate::mtmdd::{
-    MtMddNode,
-    MtMdd,
-};
-
-use crate::mdd::{
-    MddNode,
-    Mdd,
-};
+use crate::mdd;
+use crate::mtmdd;
 
 use crate::dot::Dot;
-use crate::count::Count;
-use crate::gc::Gc;
 
-#[derive(Debug,PartialEq,Eq,Hash)]
-enum Operation {
-    Eq,
-    NEq,
-    Lt,
-    LtE,
-    Gt,
-    GtE,
-    If,
-    Else,
-    Union,
-}
+type VNode<V> = mtmdd::Node<V>;
+type BNode = mdd::Node;
 
-type VNode<V> = MtMddNode<V>;
-type BNode = MddNode;
-type Node<V> = MtMdd2Node<V>;
-
-#[derive(Debug,Clone)]
-pub enum MtMdd2Node<V> {
-    Value(VNode<V>),
-    Bool(BNode),
-    Undet,
-}
-
-impl<V> PartialEq for Node<V> where V: TerminalNumberValue {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Node::Value(f), Node::Value(g)) => f.id() == g.id(),
-            (Node::Bool(f), Node::Bool(g)) => f.id() == g.id(),
-            (Node::Undet, Node::Undet) => true,
-            _ => false,
-        }
-    }
-}
-
-impl<V> Eq for Node<V> where V: TerminalNumberValue {}
-
-impl<V> Hash for Node<V> where V: TerminalNumberValue {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            Node::Value(f) => f.id().hash(state),
-            Node::Bool(f) => f.id().hash(state),
-            Node::Undet => 0.hash(state),
-        }
-    }
+#[derive(Debug, Clone, Copy)]
+pub enum Node {
+    Value(NodeId),
+    Bool(NodeId),
 }
 
 #[derive(Debug)]
-pub struct MtMdd2<V> {
-    mdd: Mdd,
-    mtmdd: MtMdd<V>,
-    num_headers: HeaderId,
-    bcache: HashMap<(Operation, NodeId, NodeId), BNode>,
-    vcache: HashMap<(Operation, NodeId, NodeId), VNode<V>>,
+pub struct MtMdd2Manager<V> {
+    mdd: mdd::MddManager,
+    mtmdd: mtmdd::MtMddManager<V>,
+    bcache: HashMap<(Operation, NodeId, NodeId), NodeId>,
+    vcache: HashMap<(Operation, NodeId, NodeId), NodeId>,
 }
 
-impl<V> Default for MtMdd2<V> where V: TerminalNumberValue {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<V> MtMdd2<V> where V: TerminalNumberValue {
+impl<V> MtMdd2Manager<V>
+where
+    V: TerminalNumberValue,
+{
     pub fn new() -> Self {
         Self {
-            mdd: Mdd::new(),
-            mtmdd: MtMdd::new(),
-            num_headers: 0,
+            mdd: mdd::MddManager::new(),
+            mtmdd: mtmdd::MtMddManager::new(),
             bcache: HashMap::default(),
-            vcache: HashMap::default()
+            vcache: HashMap::default(),
         }
     }
 
-    pub fn mtmdd(&self) -> &MtMdd<V> {
+    #[inline]
+    pub fn mtmdd(&self) -> &mtmdd::MtMddManager<V> {
         &self.mtmdd
     }
 
-    pub fn mtmdd_mut(&mut self) -> &mut MtMdd<V> {
+    #[inline]
+    pub fn mtmdd_mut(&mut self) -> &mut mtmdd::MtMddManager<V> {
         &mut self.mtmdd
     }
 
-    pub fn mdd(&self) -> &Mdd {
+    #[inline]
+    pub fn mdd(&self) -> &mdd::MddManager {
         &self.mdd
     }
 
-    pub fn mdd_mut(&mut self) -> &mut Mdd {
+    #[inline]
+    pub fn mdd_mut(&mut self) -> &mut mdd::MddManager {
         &mut self.mdd
     }
 
-    pub fn size(&self) -> (usize, HeaderId, NodeId, usize) {
+    #[inline]
+    pub fn size(&self) -> (usize, usize, usize, usize) {
         let (u1, _x1, y1, z1) = self.mtmdd.size();
         let (_x2, y2, z2) = self.mdd.size();
-        (u1, self.num_headers, y1+y2, z1+z2)
+        self.mtmdd.size()
     }
-   
-    pub fn one(&self) -> Node<V> {
+
+    #[inline]
+    pub fn one(&self) -> Node {
         Node::Bool(self.mdd.one())
     }
 
-    pub fn zero(&self) -> Node<V> {
+    #[inline]
+    pub fn zero(&self) -> Node {
         Node::Bool(self.mdd.zero())
     }
 
-    pub fn value(&mut self, value: V) -> Node<V> {
+    #[inline]
+    pub fn value(&mut self, value: V) -> Node {
         Node::Value(self.mtmdd.value(value))
     }
 
-    pub fn header(&mut self, level: Level, label: &str, edge_num: usize) -> NodeHeader {
-        let h = NodeHeader::new(self.num_headers, level, label, edge_num);
-        self.num_headers += 1;
-        h
+    #[inline]
+    pub fn create_header(&mut self, level: Level, label: &str, edge_num: usize) -> HeaderId {
+        let h1 = self.mtmdd.create_header(level, label, edge_num);
+        let h2 = self.mdd.create_header(level, label, edge_num);
+        assert_eq!(h1, h2);
+        h1
     }
 
-    pub fn node(&mut self, h: &NodeHeader, nodes: &[Node<V>]) -> Result<Node<V>,String> {
-        if h.edge_num() != nodes.len() {
-            return Err(String::from("Did not match the number of edges in header and arguments."))
-        }
-        let elem_value: Result<Vec<VNode<V>>,String> = nodes.iter().map(|x| {
-            match x {
-                Node::Value(f) => Ok(f.clone()),
-                _ => Err(String::from("nodes includes different type.")),
-            }
-        }).collect();
-        match elem_value {
-            Ok(x) => Ok(Node::Value(self.mtmdd.create_node(h, &x))),
-            Err(_) => {
-                let elem_bool: Result<Vec<BNode>,String> = nodes.iter().map(|x| {
-                    match x {
-                        Node::Bool(f) => Ok(f.clone()),
-                        _ => Err(String::from("nodes includes different type.")),
-                    }
-                }).collect();
-                match elem_bool {
-                    Ok(x) => Ok(Node::Bool(self.mdd.create_node(h, &x))),
-                    Err(_) => Err(String::from("nodes cannot be converted either value nor bool."))
-                }
-            },
+    pub fn create_node(&mut self, h: HeaderId, nodes: &[Node]) -> Node {
+        let elem: Vec<NodeId> = nodes
+            .iter()
+            .map(|x| match x {
+                Node::Value(f) => *f,
+                Node::Bool(f) => *f,
+            })
+            .collect();
+        match nodes[0] {
+            Node::Value(_) => Node::Value(self.mtmdd.create_node(h, &elem)),
+            Node::Bool(_) => Node::Bool(self.mdd.create_node(h, &elem)),
         }
     }
 
-    pub fn and(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum Operation {
+    Eq,
+    Lt,
+    // LtE,
+    // Gt,
+    // GtE,
+    If,
+}
+
+impl<V> MtMdd2Manager<V>
+where
+    V: TerminalNumberValue,
+{
+    pub fn and(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.and(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn or(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn or(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.or(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn xor(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn xor(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.xor(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn not(&mut self, f: &Node<V>) -> Node<V> {
+    pub fn not(&mut self, f: Node) -> Node {
         match f {
             Node::Bool(fnode) => Node::Bool(self.mdd.not(fnode)),
-            _ => Node::Undet,
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn add(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn add(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.add(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Value(self.mtmdd.undet()),
         }
     }
 
-    pub fn sub(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn sub(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.sub(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Value(self.mtmdd.undet()),
         }
     }
 
-    pub fn mul(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn mul(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.mul(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Value(self.mtmdd.undet()),
         }
     }
 
-    pub fn div(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn div(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.div(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Value(self.mtmdd.undet()),
         }
     }
 
-    pub fn max(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn max(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.max(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Value(self.mtmdd.undet()),
         }
     }
 
-    pub fn min(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn min(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Value(self.mtmdd.min(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Value(self.mtmdd.undet()),
         }
     }
+}
 
-    pub fn eq(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+impl<V> MtMdd2Manager<V>
+where
+    V: TerminalNumberValue,
+{
+    pub fn eq(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Bool(fnode), Node::Bool(gnode)) => {
                 let tmp = self.mdd.xor(fnode, gnode);
-                Node::Bool(self.mdd.not(&tmp))
-            },
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.veq(fnode, gnode)),
-            _ => Node::Undet,
-        }
-    }
-
-    pub fn veq(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::Eq, f.id(), g.id());
-        match self.bcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() == gnode.value() => self.mdd.one(),
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() != gnode.value() => self.mdd.zero(),
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.veq(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.veq(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.veq(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.veq(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.veq(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mdd.undet(),
-                };
-                self.bcache.insert(key, node.clone());
-                node
+                Node::Bool(self.mdd.not(tmp))
             }
+            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.veq(fnode, gnode)),
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn neq(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn veq(&mut self, f: NodeId, g: NodeId) -> NodeId {
+        let key = (Operation::Eq, f, g);
+        if let Some(x) = self.bcache.get(&key) {
+            return *x;
+        }
+        let node = match (
+            self.mtmdd.get_node(f).unwrap(),
+            self.mtmdd.get_node(g).unwrap(),
+        ) {
+            (VNode::Undet, _) => self.mdd.zero(),
+            (_, VNode::Undet) => self.mdd.zero(),
+            (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() == gnode.value() => {
+                self.mdd.one()
+            }
+            (VNode::Terminal(_), VNode::Terminal(_)) => self.mdd.zero(),
+            (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
+                let headerid = gnode.headerid();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.veq(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.veq(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(fnode), VNode::NonTerminal(_gnode))
+                if self.mtmdd.level(f) > self.mtmdd.level(g) =>
+            {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.veq(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(_fnode), VNode::NonTerminal(gnode))
+                if self.mtmdd.level(f) < self.mtmdd.level(g) =>
+            {
+                let headerid = gnode.headerid();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.veq(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) => {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid
+                    .into_iter()
+                    .zip(gnodeid.into_iter())
+                    .map(|(f, g)| self.veq(f, g))
+                    .collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+        };
+        self.bcache.insert(key, node);
+        node
+    }
+
+    pub fn neq(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Bool(fnode), Node::Bool(gnode)) => Node::Bool(self.mdd.xor(fnode, gnode)),
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vneq(fnode, gnode)),
-            _ => Node::Undet,
+            (Node::Value(fnode), Node::Value(gnode)) => {
+                let tmp = self.veq(fnode, gnode);
+                Node::Bool(self.mdd.not(tmp))
+            }
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn vneq(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::NEq, f.id(), g.id());
-        match self.bcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() != gnode.value() => self.mdd.one(),
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() == gnode.value() => self.mdd.zero(),
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vneq(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vneq(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vneq(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vneq(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vneq(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mdd.undet(),
-                };
-                self.bcache.insert(key, node.clone());
-                node
-            }
-        }
-    }
-    
-    pub fn lt(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn lt(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
             (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vlt(fnode, gnode)),
-            _ => Node::Undet,
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn vlt(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::Lt, f.id(), g.id());
-        match self.bcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() < gnode.value() => self.mdd.one(),
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() >= gnode.value() => self.mdd.zero(),
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vlt(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vlt(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vlt(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vlt(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vlt(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mdd.undet(),
-                };
-                self.bcache.insert(key, node.clone());
-                node
+    pub fn vlt(&mut self, f: NodeId, g: NodeId) -> NodeId {
+        let key = (Operation::Lt, f, g);
+        if let Some(x) = self.bcache.get(&key) {
+            return *x;
+        }
+        let node = match (
+            self.mtmdd.get_node(f).unwrap(),
+            self.mtmdd.get_node(g).unwrap(),
+        ) {
+            (VNode::Undet, _) => self.mdd.zero(),
+            (_, VNode::Undet) => self.mdd.zero(),
+            (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() < gnode.value() => {
+                self.mdd.one()
             }
-        }
+            (VNode::Terminal(_fnode), VNode::Terminal(_gnode)) => self.mdd.zero(),
+            (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
+                let headerid = gnode.headerid();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.vlt(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vlt(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(fnode), VNode::NonTerminal(_gnode))
+                if self.mtmdd.level(f) > self.mtmdd.level(g) =>
+            {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vlt(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(_fnode), VNode::NonTerminal(gnode))
+                if self.mtmdd.level(f) < self.mtmdd.level(g) =>
+            {
+                let headerid = gnode.headerid();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.vlt(f, g)).collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+            (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) => {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid
+                    .into_iter()
+                    .zip(gnodeid.into_iter())
+                    .map(|(f, g)| self.vlt(f, g))
+                    .collect();
+                self.mdd.create_node(headerid, &nodes)
+            }
+        };
+        self.bcache.insert(key, node);
+        node
     }
 
-    pub fn lte(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn lte(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vlte(fnode, gnode)),
-            _ => Node::Undet,
-        }
-    }
-
-    pub fn vlte(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::LtE, f.id(), g.id());
-        match self.bcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() <= gnode.value() => self.mdd.one(),
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() > gnode.value() => self.mdd.zero(),
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vlte(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vlte(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vlte(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vlte(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vlte(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mdd.undet(),
-                };
-                self.bcache.insert(key, node.clone());
-                node
+            (Node::Value(fnode), Node::Value(gnode)) => {
+                let resulteq = self.veq(fnode, gnode);
+                if resulteq == self.mdd.one() {
+                    return Node::Bool(self.mdd.one());
+                }
+                let resultlt = self.vlt(fnode, gnode);
+                Node::Bool(resultlt)
             }
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn gt(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn gt(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vgt(fnode, gnode)),
-            _ => Node::Undet,
-        }
-    }
-
-    pub fn vgt(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::Gt, f.id(), g.id());
-        match self.bcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() > gnode.value() => self.mdd.one(),
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() <= gnode.value() => self.mdd.zero(),
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vgt(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vgt(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vgt(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vgt(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vgt(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mdd.undet(),
-                };
-                self.bcache.insert(key, node.clone());
-                node
+            (Node::Value(fnode), Node::Value(gnode)) => {
+                let tmp = self.vlt(gnode, fnode);
+                Node::Bool(tmp)
             }
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn gte(&mut self, f: &Node<V>, g: &Node<V>) -> Node<V> {
+    pub fn gte(&mut self, f: Node, g: Node) -> Node {
         match (f, g) {
-            (Node::Value(fnode), Node::Value(gnode)) => Node::Bool(self.vgte(fnode, gnode)),
-            _ => Node::Undet,
-        }
-    }
-
-    pub fn vgte(&mut self, f: &VNode<V>, g: &VNode<V>) -> BNode {
-        let key = (Operation::GtE, f.id(), g.id());
-        match self.bcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() >= gnode.value() => self.mdd.one(),
-                    (VNode::Terminal(fnode), VNode::Terminal(gnode)) if fnode.value() < gnode.value() => self.mdd.zero(),
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vgte(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vgte(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vgte(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vgte(f, g)).collect();
-                        self.mdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vgte(f, g)).collect();
-                        self.mdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mdd.undet(),
-                };
-                self.bcache.insert(key, node.clone());
-                node
+            (Node::Value(fnode), Node::Value(gnode)) => {
+                let resultlt = self.vlt(fnode, gnode);
+                let result = self.mdd.not(resultlt);
+                Node::Bool(result)
             }
+            _ => Node::Bool(self.mdd.undet()),
         }
     }
 
-    pub fn vif(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::If, f.id(), g.id());
-        match self.vcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (BNode::Zero, _) => self.mtmdd.undet(),
-                    (BNode::One, _) => g.clone(),
-                    (BNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vif(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    (BNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vif(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    (BNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vif(f, g)).collect();
-                        self.mtmdd.create_node(gnode.header(), &nodes)
-                    },
-                    (BNode::NonTerminal(fnode),VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vif(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mtmdd.undet(),
-                };
-                self.vcache.insert(key, node.clone());
-                node
-            }
-        }
-    }
-
-    pub fn velse(&mut self, f: &BNode, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::Else, f.id(), g.id());
-        match self.vcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (BNode::Zero, _) => g.clone(),
-                    (BNode::One, _) => self.mtmdd.undet(),
-                    (BNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.velse(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    (BNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.velse(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    (BNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.velse(f, g)).collect();
-                        self.mtmdd.create_node(gnode.header(), &nodes)
-                    },
-                    (BNode::NonTerminal(fnode),VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.velse(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mtmdd.undet(),
-                };
-                self.vcache.insert(key, node.clone());
-                node
-            }
-        }
-    }
-
-    pub fn vunion(&mut self, f: &VNode<V>, g: &VNode<V>) -> VNode<V> {
-        let key = (Operation::Union, f.id(), g.id());
-        match self.vcache.get(&key) {
-            Some(x) => x.clone(),
-            None => {
-                let node = match (f, g) {
-                    (VNode::Undet, _) => g.clone(),
-                    (_, VNode::Undet) => f.clone(),
-                    (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vunion(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
-                        let nodes: Vec<_> = gnode.iter().map(|f| self.vunion(f, g)).collect();
-                        self.mtmdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() > gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().map(|f| self.vunion(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) if fnode.level() < gnode.level() => {
-                        let nodes: Vec<_> = gnode.iter().map(|g| self.vunion(f, g)).collect();
-                        self.mtmdd.create_node(gnode.header(), &nodes)
-                    },
-                    (VNode::NonTerminal(fnode),VNode::NonTerminal(gnode)) if fnode.level() == gnode.level() => {
-                        let nodes: Vec<_> = fnode.iter().zip(gnode.iter()).map(|(f,g)| self.vunion(f, g)).collect();
-                        self.mtmdd.create_node(fnode.header(), &nodes)
-                    },
-                    _ => self.mtmdd.undet(),
-                };
-                self.vcache.insert(key, node.clone());
-                node
-            }
-        }
-    }
-
-    pub fn vifelse(&mut self, f: &BNode, g: &VNode<V>, h: &VNode<V>) -> VNode<V> {
-        let x = self.vif(f, g);
-        let y = self.velse(f, h);
-        self.vunion(&x, &y)
-    }
-
-    pub fn ifelse(&mut self, f: &Node<V>, g: &Node<V>, h: &Node<V>) -> Node<V> {
+    pub fn ite(&mut self, f: Node, g: Node, h: Node) -> Node {
         match (f, g, h) {
             (Node::Bool(fnode), Node::Value(gnode), Node::Value(hnode)) => {
-                Node::Value(self.vifelse(fnode, gnode, hnode))
-            },
-            (Node::Bool(fnode), Node::Bool(gnode), Node::Bool(hnode)) => {
-                Node::Bool(self.mdd.ite(fnode, gnode, hnode))
-            },
-            _ => Node::Undet,
-        }
-    }
-
-    pub fn case(&mut self, conds: &[(Node<V>, Node<V>)], default: &Node<V>) -> Node<V> {
-        let mut h = default.clone();
-        for (f, g) in conds.iter().rev() {
-            h = match (f, g, h) {
-                (Node::Bool(fnode), Node::Value(gnode), Node::Value(hnode)) =>
-                    Node::Value(self.vifelse(fnode, gnode, &hnode)),
-                (Node::Bool(fnode), Node::Value(gnode), Node::Undet) =>
-                    Node::Value(self.vifelse(fnode, gnode, &VNode::Undet)),
-                _ => Node::Undet,
+                let barf = self.mdd.not(fnode);
+                let vif = self.vif(fnode, gnode);
+                let barvif = self.vif(barf, hnode);
+                let result = self.mtmdd.replace(vif, barvif);
+                Node::Value(result)
             }
+            (Node::Bool(fnode), Node::Bool(gnode), Node::Bool(hnode)) => {
+                let result = self.mdd.ite(fnode, gnode, hnode);
+                Node::Bool(result)
+            }
+            (_, Node::Value(_gnode), Node::Value(_hnode)) => {
+                let result = self.mtmdd.undet();
+                Node::Value(result)
+            }
+            (_, Node::Bool(_gnode), Node::Bool(_hnode)) => {
+                let result = self.mdd.undet();
+                Node::Bool(result)
+            }
+            _ => panic!("ite: unexpected pattern."),
         }
-        h
+    }
+
+    pub fn vif(&mut self, f: NodeId, g: NodeId) -> NodeId {
+        let key = (Operation::If, f, g);
+        if let Some(x) = self.vcache.get(&key) {
+            return *x;
+        }
+        let node = match (
+            self.mdd.get_node(f).unwrap(),
+            self.mtmdd.get_node(g).unwrap(),
+        ) {
+            (BNode::Undet, _) => self.mtmdd.undet(),
+            (_, VNode::Undet) => self.mtmdd.undet(),
+            (BNode::Zero, _) => self.mtmdd.undet(),
+            (BNode::One, _) => g,
+            (BNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vif(f, g)).collect();
+                self.mtmdd.create_node(headerid, &nodes)
+            }
+            (BNode::NonTerminal(fnode), VNode::NonTerminal(_gnode))
+                if self.mdd.level(f) > self.mtmdd.level(g) =>
+            {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vif(f, g)).collect();
+                self.mtmdd.create_node(headerid, &nodes)
+            }
+            (BNode::NonTerminal(_fnode), VNode::NonTerminal(gnode))
+                if self.mdd.level(f) < self.mtmdd.level(g) =>
+            {
+                let headerid = gnode.headerid();
+                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.vif(f, g)).collect();
+                self.mtmdd.create_node(headerid, &nodes)
+            }
+            (BNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) => {
+                let headerid = fnode.headerid();
+                let fnodeid: Vec<_> = fnode.iter().map(|&f| f).collect();
+                let gnodeid: Vec<_> = gnode.iter().map(|&g| g).collect();
+                let nodes: Vec<_> = fnodeid
+                    .into_iter()
+                    .zip(gnodeid.into_iter())
+                    .map(|(f, g)| self.vif(f, g))
+                    .collect();
+                self.mtmdd.create_node(headerid, &nodes)
+            }
+        };
+        self.vcache.insert(key, node);
+        node
     }
 }
 
-impl<V> Gc for MtMdd2<V> where V: TerminalNumberValue {
-    type Node = Node<V>;
+// impl<V> Gc for MtMdd2<V> where V: TerminalNumberValue {
+//     type Node = Node<V>;
 
-    fn clear_cache(&mut self) {
-        self.mdd.clear_cache();
-        self.mtmdd.clear_cache();
-    }
-    
-    fn clear_table(&mut self) {
-        self.mdd.clear_table();
-        self.mtmdd.clear_table();
-    }
-    
-    fn gc_impl(&mut self, f: &Self::Node, _visited: &mut HashSet<Self::Node>) {
-        match f {
-            Node::Bool(bnode) => {
-                let mut visited: HashSet<BNode> = HashSet::default();
-                self.mdd.gc_impl(bnode, &mut visited)
-            },
-            Node::Value(vnode) => {
-                let mut visited: HashSet<VNode<V>> = HashSet::default();
-                self.mtmdd.gc_impl(vnode, &mut visited)
-            },
-            _ => ()
-        }
-    }
-}
+//     fn clear_cache(&mut self) {
+//         self.mdd.clear_cache();
+//         self.mtmdd.clear_cache();
+//     }
 
-impl<V> Dot for Node<V> where V: TerminalNumberValue {
-    type Node = Node<V>;
+//     fn clear_table(&mut self) {
+//         self.mdd.clear_table();
+//         self.mtmdd.clear_table();
+//     }
 
-    fn dot_impl<T>(&self, io: &mut T, _visited: &mut HashSet<Self::Node>) where T: std::io::Write {
-        match self {
-            Node::Value(f) => {
-                let mut visited = HashSet::<VNode<V>>::default();
-                f.dot_impl(io, &mut visited)
-            },
-            Node::Bool(f) => {
-                let mut visited = HashSet::<BNode>::default();
-                f.dot_impl(io, &mut visited)
-            },
-            Node::Undet => (),
+//     fn gc_impl(&mut self, f: &Self::Node, _visited: &mut HashSet<Self::Node>) {
+//         match f {
+//             Node::Bool(bnode) => {
+//                 let mut visited: HashSet<BNode> = HashSet::default();
+//                 self.mdd.gc_impl(bnode, &mut visited)
+//             },
+//             Node::Value(vnode) => {
+//                 let mut visited: HashSet<VNode<V>> = HashSet::default();
+//                 self.mtmdd.gc_impl(vnode, &mut visited)
+//             },
+//             _ => ()
+//         }
+//     }
+// }
+
+impl<V> Dot for MtMdd2Manager<V>
+where
+    V: TerminalNumberValue,
+{
+    type Node = Node;
+
+    fn dot_impl<T>(&self, io: &mut T, node: Node, visited: &mut HashSet<NodeId>)
+    where
+        T: std::io::Write,
+    {
+        match node {
+            Node::Value(f) => self.mtmdd.dot_impl(io, f, visited),
+            Node::Bool(f) => self.mdd.dot_impl(io, f, visited),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Token<V> {
+pub enum Token {
     Add,
     Sub,
     Mul,
@@ -699,124 +516,124 @@ pub enum Token<V> {
     Not,
     Xor,
     IfElse,
-    Value(Node<V>),
+    Value(Node),
 }
 
-pub fn build_from_rpn<V>(dd: &mut MtMdd2<V>, tokens: &[Token<V>]) -> Result<Node<V>, String>
+pub fn build_from_rpn<V>(dd: &mut MtMdd2Manager<V>, tokens: &[Token]) -> Result<Node, String>
     where V: TerminalNumberValue + std::str::FromStr
 {
-    let mut stack: Vec<Node<V>> = Vec::new();
+    let mut stack: Vec<Node> = Vec::new();
 
     for token in tokens {
         match token {
             Token::Add => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.add(&a, &b);
+                let tmp = dd.add(a, b);
                 stack.push(tmp);
             }
             Token::Sub => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.sub(&a, &b);
+                let tmp = dd.sub(a, b);
                 stack.push(tmp);
             }
             Token::Mul => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.mul(&a, &b);
+                let tmp = dd.mul(a, b);
                 stack.push(tmp);
             }
             Token::Div => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.div(&a, &b);
+                let tmp = dd.div(a, b);
                 stack.push(tmp);
             }
             Token::Eq => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.eq(&a, &b);
+                let tmp = dd.eq(a, b);
                 stack.push(tmp);
             }
             Token::Neq => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.neq(&a, &b);
+                let tmp = dd.neq(a, b);
                 stack.push(tmp);
             }
             Token::Lt => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.lt(&a, &b);
+                let tmp = dd.lt(a, b);
                 stack.push(tmp);
             }
             Token::Lte => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.lte(&a, &b);
+                let tmp = dd.lte(a, b);
                 stack.push(tmp);
             }
             Token::Gt => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.gt(&a, &b);
+                let tmp = dd.gt(a, b);
                 stack.push(tmp);
             }
             Token::Gte => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.gte(&a, &b);
+                let tmp = dd.gte(a, b);
                 stack.push(tmp);
             }
             Token::And => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.and(&a, &b);
+                let tmp = dd.and(a, b);
                 stack.push(tmp);
             }
             Token::Or => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.or(&a, &b);
+                let tmp = dd.or(a, b);
                 stack.push(tmp);
             }
             Token::Xor => {
                 let b = stack.pop().ok_or("Stack underflow")?;
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.xor(&a, &b);
+                let tmp = dd.xor(a, b);
                 stack.push(tmp);
             }
             Token::Not => {
                 let a = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.not(&a);
+                let tmp = dd.not(a);
                 stack.push(tmp);
             }
             Token::IfElse => {
                 let else_branch = stack.pop().ok_or("Stack underflow")?;
                 let then_branch = stack.pop().ok_or("Stack underflow")?;
                 let condition = stack.pop().ok_or("Stack underflow")?;
-                let tmp = dd.ifelse(&condition, &then_branch, &else_branch);
+                let tmp = dd.ite(condition, then_branch, else_branch);
                 stack.push(tmp);
             }
             Token::Value(node) => stack.push(node.clone()),
         }
     }
-    if stack.len() == 1 {
-        Ok(stack.pop().unwrap())
+    if let Some(result) = stack.pop() {
+        Ok(result)
     } else {
         Err("The expression is invalid.".to_string())
     }
 }
 
-pub fn gen_var<T>(f: &mut MtMdd2<T>, label: &str, level: usize, range: &[T]) -> Node<T>
+pub fn gen_var<T>(dd: &mut MtMdd2Manager<T>, label: &str, level: usize, range: &[T]) -> Node
 where
     T: TerminalNumberValue,
 {
     let count = range.len();
-    let htmp = f.header(level, label, count);
-    let tmp = range.iter().map(|&i| f.value(i)).collect::<Vec<_>>();
-    f.node(&htmp, &tmp).unwrap()
+    let htmp = dd.create_header(level, label, count);
+    let tmp = range.iter().map(|&i| dd.value(i)).collect::<Vec<_>>();
+    dd.create_node(htmp, &tmp)
 }
 
 #[macro_export]
@@ -872,11 +689,6 @@ macro_rules! rpn_token {
     };
 }
 
-// fn testfn() {
-//     let mut f = MtMdd2::<i64>::new();
-//     let tokens = mtmdd_expr!{f, xx y + 5 <= x x y + 3 >= y x ? ?};
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -888,91 +700,78 @@ mod tests {
     // }
 
     #[test]
-    fn test_ope1() {
-        let n = 100;
-        let mut f = MtMdd2::<i64>::new();
-        let h1 = f.header(1, "y1", 2);
-        let h2 = f.header(2, "y2", 2);
-        let h3 = f.header(3, "y3", 2);
-        let consts: Vec<_> = (0..n).map(|i| f.value(i)).collect();
-        let _y1 = f.node(&h1, &[consts[0].clone(), consts[1].clone()]).unwrap();
-        let _y2 = f.node(&h2, &[consts[0].clone(), consts[1].clone()]).unwrap();
-        let y3 = f.node(&h3, &[consts[0].clone(), consts[1].clone()]).unwrap();
-        // let tmp2 = f.mul(&consts[2], &y2);
-        let _tmp3 = f.mul(&consts[3], &y3);
-        let _tmp4 = f.lt(&y3, &consts[2]);
+    fn test_create_node() {
+        let mut dd = MtMdd2Manager::new();
+        let h1 = dd.create_header(0, "x", 2);
+        let h2 = dd.create_header(1, "y", 2);
+        let v0 = dd.value(0);
+        let v1 = dd.value(1);
+        let x = dd.create_node(h1, &[v0, v1]);
+        let y = dd.create_node(h2, &[x, v1]);
+        println!("{}", dd.dot_string(y));
     }
 
     #[test]
-    fn test_ope2() {
-        // x + y <= 5, 0 <= x <= 5, 0 <= y <= 5
-        let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
-        let tmp1 = f.add(&x, &y);
-        let tmp2 = f.value(5);
-        let tmp3 = f.lte(&tmp1, &tmp2);
-        println!("{}", tmp3.dot_string());
+    fn test_create_node2() {
+        let mut dd = MtMdd2Manager::new();
+        let x = gen_var(&mut dd, "x", 0, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut dd, "y", 1, &[0,1,2,3,4,5]);
+        let z = dd.add(x, y);
+        println!("{}", dd.dot_string(z));
     }
 
     #[test]
-    fn test_ope3() {
-        // ifelse(x + y <= 5, x, y), 0 <= x <= 5, 0 <= y <= 5
-        let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
-        let tmp1 = f.add(&x, &y);
-        let tmp2 = f.value(5);
-        let tmp3 = f.lte(&tmp1, &tmp2);
-        let _c1 = f.value(19);
-        let _c2 = f.value(20);
-        let tmp4 = f.ifelse(&tmp3, &x, &y);
-        println!("{}", tmp4.dot_string());
+    fn test_eq() {
+        let mut dd = MtMdd2Manager::new();
+        let x = gen_var(&mut dd, "x", 0, &[0,1,2]);
+        let y = gen_var(&mut dd, "y", 1, &[0,1,2]);
+        let z = gen_var(&mut dd, "z", 2, &[0,1,2]);
+        let f = dd.add(x, y);
+        let g = dd.sub(z, x);
+        let h = dd.eq(f, g);
+        println!("{}", dd.dot_string(h));
     }
 
     #[test]
-    fn test_ope4() {
+    fn test_ite() {
+        let mut dd = MtMdd2Manager::new();
+        let x = gen_var(&mut dd, "x", 0, &[0,1,2]);
+        let y = gen_var(&mut dd, "y", 1, &[0,1,2]);
+        let z = gen_var(&mut dd, "z", 2, &[0,1,2]);
+        let f = dd.add(x, y);
+        let g = dd.eq(f, z);    
+        let g = dd.ite(g, x, z);
+        println!("{}", dd.dot_string(g));
+    }
+
+    #[test]
+    fn test_build_rpn() {
         // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
-        let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
-        let tmp1 = f.add(&x, &y);
-        let tmp2 = f.value(5);
-        let tmp3 = f.lte(&tmp1, &tmp2);
-        let tmp4 = f.value(3);
-        let tmp5 = f.gte(&tmp1, &tmp4);
-        let res = f.case(&[(tmp3.clone(), x.clone()), (tmp5.clone(), y.clone())], &x);
-        println!("{}", res.dot_string());
-    }
-
-    #[test]
-    fn test_ope5() {
-        // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
-        let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
+        let mut dd = MtMdd2Manager::new();
+        let x = gen_var(&mut dd, "x", 0, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut dd, "y", 1, &[0,1,2,3,4,5]);
         // x y + 5 <= x x y + 3 >= y x ? ?
         let tokens = vec![
-            Token::Value(x.clone()),
-            Token::Value(y.clone()),
+            Token::Value(x),
+            Token::Value(y),
             Token::Add,
-            Token::Value(f.value(5)),
+            Token::Value(dd.value(5)),
             Token::Lte,
-            Token::Value(x.clone()),
-            Token::Value(x.clone()),
-            Token::Value(y.clone()),
+            Token::Value(x),
+            Token::Value(x),
+            Token::Value(y),
             Token::Add,
-            Token::Value(f.value(3)),
+            Token::Value(dd.value(3)),
             Token::Gte,
-            Token::Value(y.clone()),
-            Token::Value(x.clone()),
+            Token::Value(y),
+            Token::Value(x),
             Token::IfElse,
             Token::IfElse,
         ];
-        let res = build_from_rpn(&mut f, &tokens);
+        let res = build_from_rpn(&mut dd, &tokens);
         match res {
             Ok(res) => {
-                println!("{}", res.dot_string())
+                println!("{}", dd.dot_string(res))
             },
             Err(e) => {
                 println!("{}", e)
@@ -983,13 +782,13 @@ mod tests {
     #[test]
     fn test_ope6() {
         // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
-        let mut f = MtMdd2::<i64>::new();
-        let x = gen_var(&mut f, "x", 1, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut f, "y", 2, &[0,1,2,3,4,5]);
-        let res = build_from_rpn!{f, x y + 5 <= x x y + 3 >= y x ? ?};
+        let mut dd = MtMdd2Manager::new();
+        let x = gen_var(&mut dd, "x", 1, &[0,1,2,3,4,5]);
+        let y = gen_var(&mut dd, "y", 2, &[0,1,2,3,4,5]);
+        let res = build_from_rpn!{dd, x y + 5 <= x x y + 3 >= y x ? ?};
         match res {
             Ok(res) => {
-                println!("{}", res.dot_string())
+                println!("{}", dd.dot_string(res))
             },
             Err(e) => {
                 println!("{}", e)
