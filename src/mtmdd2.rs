@@ -103,7 +103,6 @@ where
             Node::Bool(_) => Node::Bool(self.mdd.create_node(h, &elem)),
         }
     }
-
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -492,7 +491,8 @@ pub enum Token {
 }
 
 pub fn build_from_rpn<V>(dd: &mut MtMdd2Manager<V>, tokens: &[Token]) -> Result<Node, String>
-    where V: TerminalNumberValue + std::str::FromStr
+where
+    V: TerminalNumberValue + std::str::FromStr,
 {
     let mut stack: Vec<Node> = Vec::new();
 
@@ -686,8 +686,8 @@ mod tests {
     #[test]
     fn test_create_node2() {
         let mut dd = MtMdd2Manager::new();
-        let x = gen_var(&mut dd, "x", 0, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut dd, "y", 1, &[0,1,2,3,4,5]);
+        let x = gen_var(&mut dd, "x", 0, &[0, 1, 2, 3, 4, 5]);
+        let y = gen_var(&mut dd, "y", 1, &[0, 1, 2, 3, 4, 5]);
         let z = dd.add(x, y);
         println!("{}", dd.dot_string(z));
     }
@@ -695,9 +695,9 @@ mod tests {
     #[test]
     fn test_eq() {
         let mut dd = MtMdd2Manager::new();
-        let x = gen_var(&mut dd, "x", 0, &[0,1,2]);
-        let y = gen_var(&mut dd, "y", 1, &[0,1,2]);
-        let z = gen_var(&mut dd, "z", 2, &[0,1,2]);
+        let x = gen_var(&mut dd, "x", 0, &[0, 1, 2]);
+        let y = gen_var(&mut dd, "y", 1, &[0, 1, 2]);
+        let z = gen_var(&mut dd, "z", 2, &[0, 1, 2]);
         let f = dd.add(x, y);
         let g = dd.sub(z, x);
         let h = dd.eq(f, g);
@@ -707,11 +707,11 @@ mod tests {
     #[test]
     fn test_ite() {
         let mut dd = MtMdd2Manager::new();
-        let x = gen_var(&mut dd, "x", 0, &[0,1,2]);
-        let y = gen_var(&mut dd, "y", 1, &[0,1,2]);
-        let z = gen_var(&mut dd, "z", 2, &[0,1,2]);
+        let x = gen_var(&mut dd, "x", 0, &[0, 1, 2]);
+        let y = gen_var(&mut dd, "y", 1, &[0, 1, 2]);
+        let z = gen_var(&mut dd, "z", 2, &[0, 1, 2]);
         let f = dd.add(x, y);
-        let g = dd.eq(f, z);    
+        let g = dd.eq(f, z);
         let g = dd.ite(g, x, z);
         println!("{}", dd.dot_string(g));
     }
@@ -720,8 +720,8 @@ mod tests {
     fn test_build_rpn() {
         // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
         let mut dd = MtMdd2Manager::new();
-        let x = gen_var(&mut dd, "x", 0, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut dd, "y", 1, &[0,1,2,3,4,5]);
+        let x = gen_var(&mut dd, "x", 0, &[0, 1, 2, 3, 4, 5]);
+        let y = gen_var(&mut dd, "y", 1, &[0, 1, 2, 3, 4, 5]);
         // x y + 5 <= x x y + 3 >= y x ? ?
         let tokens = vec![
             Token::Value(x),
@@ -744,7 +744,7 @@ mod tests {
         match res {
             Ok(res) => {
                 println!("{}", dd.dot_string(res))
-            },
+            }
             Err(e) => {
                 println!("{}", e)
             }
@@ -755,13 +755,13 @@ mod tests {
     fn test_ope6() {
         // case(x + y <= 5 => x, x + y >= 3 => y, _ => x), 0 <= x <= 5, 0 <= y <= 5
         let mut dd = MtMdd2Manager::new();
-        let x = gen_var(&mut dd, "x", 1, &[0,1,2,3,4,5]);
-        let y = gen_var(&mut dd, "y", 2, &[0,1,2,3,4,5]);
-        let res = build_from_rpn!{dd, x y + 5 <= x x y + 3 >= y x ? ?};
+        let x = gen_var(&mut dd, "x", 1, &[0, 1, 2, 3, 4, 5]);
+        let y = gen_var(&mut dd, "y", 2, &[0, 1, 2, 3, 4, 5]);
+        let res = build_from_rpn! {dd, x y + 5 <= x x y + 3 >= y x ? ?};
         match res {
             Ok(res) => {
                 println!("{}", dd.dot_string(res))
-            },
+            }
             Err(e) => {
                 println!("{}", e)
             }

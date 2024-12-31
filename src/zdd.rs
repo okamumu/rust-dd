@@ -559,11 +559,11 @@ impl ZddManager {
 mod tests {
     use super::*;
 
-    impl Drop for Node {
-        fn drop(&mut self) {
-            println!("Dropping Node{}", self.id());
-        }
-    }
+    // impl Drop for Node {
+    //     fn drop(&mut self) {
+    //         println!("Dropping Node{}", self.id());
+    //     }
+    // }
 
     #[test]
     fn new_header() {

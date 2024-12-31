@@ -152,8 +152,8 @@ impl BddManager {
         let one = {
             let onenode = Node::One;
             let id = onenode.id();
-            debug_assert!(id == nodes[id].id());
             nodes.push(onenode);
+            debug_assert!(id == nodes[id].id());
             id
         };
         let utable = HashMap::default();
@@ -513,11 +513,11 @@ impl BddManager {
 mod tests {
     use super::*;
 
-    impl Drop for Node {
-        fn drop(&mut self) {
-            println!("Dropping Node{}", self.id());
-        }
-    }
+    // impl Drop for Node {
+    //     fn drop(&mut self) {
+    //         println!("Dropping Node{}", self.id());
+    //     }
+    // }
 
     #[test]
     fn new_header() {

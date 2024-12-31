@@ -576,11 +576,11 @@ impl Dot for MddManager {
 mod tests {
     use super::*;
 
-    impl Drop for Node {
-        fn drop(&mut self) {
-            println!("Dropping Node{}", self.id());
-        }
-    }
+    // impl Drop for Node {
+    //     fn drop(&mut self) {
+    //         println!("Dropping Node{}", self.id());
+    //     }
+    // }
 
     #[test]
     fn test_create_node() {
