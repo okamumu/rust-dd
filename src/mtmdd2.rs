@@ -62,9 +62,9 @@ where
 
     #[inline]
     pub fn size(&self) -> (usize, usize, usize, usize) {
-        let (u1, _x1, y1, z1) = self.mtmdd.size();
-        let (_x2, y2, z2) = self.mdd.size();
-        self.mtmdd.size()
+        let (u1, x1, y1, z1) = self.mtmdd.size();
+        let (x2, y2, z2) = self.mdd.size();
+        (u1, x1, y1, z1 + x2 + y2 + z2)
     }
 
     #[inline]
@@ -453,34 +453,6 @@ where
         node
     }
 }
-
-// impl<V> Gc for MtMdd2<V> where V: TerminalNumberValue {
-//     type Node = Node<V>;
-
-//     fn clear_cache(&mut self) {
-//         self.mdd.clear_cache();
-//         self.mtmdd.clear_cache();
-//     }
-
-//     fn clear_table(&mut self) {
-//         self.mdd.clear_table();
-//         self.mtmdd.clear_table();
-//     }
-
-//     fn gc_impl(&mut self, f: &Self::Node, _visited: &mut HashSet<Self::Node>) {
-//         match f {
-//             Node::Bool(bnode) => {
-//                 let mut visited: HashSet<BNode> = HashSet::default();
-//                 self.mdd.gc_impl(bnode, &mut visited)
-//             },
-//             Node::Value(vnode) => {
-//                 let mut visited: HashSet<VNode<V>> = HashSet::default();
-//                 self.mtmdd.gc_impl(vnode, &mut visited)
-//             },
-//             _ => ()
-//         }
-//     }
-// }
 
 impl<V> Dot for MtMdd2Manager<V>
 where

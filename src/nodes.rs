@@ -1,7 +1,7 @@
-use std::ops::{Index, IndexMut};
-use std::slice::{Iter, IterMut};
+use std::ops::Index;
+use std::slice::Iter;
 
-use crate::common::{EdgeValue, HeaderId, Level, NodeId, TerminalNumberValue};
+use crate::common::{HeaderId, Level, NodeId};
 
 /// Trait for a terminal node, which extends `Node`.
 pub trait Terminal {

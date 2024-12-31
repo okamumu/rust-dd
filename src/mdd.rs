@@ -1,4 +1,4 @@
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::ops::Index;
 use std::slice::Iter;
 
@@ -247,7 +247,7 @@ impl MddManager {
             (_, Node::Zero) => self.zero(),
             (_, Node::One) => f,
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.level(f) > self.level(g) =>
             {
                 let headerid = fnode.headerid();
@@ -255,7 +255,7 @@ impl MddManager {
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.and(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.level(f) < self.level(g) =>
             {
                 let headerid = gnode.headerid();
@@ -292,7 +292,7 @@ impl MddManager {
             (_, Node::Zero) => f,
             (_, Node::One) => self.one(),
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.level(f) > self.level(g) =>
             {
                 let headerid = fnode.headerid();
@@ -300,7 +300,7 @@ impl MddManager {
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.or(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.level(f) < self.level(g) =>
             {
                 let headerid = gnode.headerid();
@@ -339,7 +339,7 @@ impl MddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => {
                 self.zero()
             }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.level(f) > self.level(g) =>
             {
                 let headerid = fnode.headerid();
@@ -347,7 +347,7 @@ impl MddManager {
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.xor(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.level(f) < self.level(g) =>
             {
                 let headerid = gnode.headerid();
@@ -420,7 +420,7 @@ impl MddManager {
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.replace(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.level(f) > self.level(g) =>
             {
                 let headerid = fnode.headerid();
@@ -428,7 +428,7 @@ impl MddManager {
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.replace(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode))
+            (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.level(f) < self.level(g) =>
             {
                 let headerid = gnode.headerid();
@@ -543,7 +543,7 @@ impl Dot for MddManager {
                 );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, &xid) in fnode.iter().enumerate() {
-                    if let Node::Undet | Node::Zero | Node::One | Node::NonTerminal(_) =
+                    if let Node::Zero | Node::One | Node::NonTerminal(_) =
                         self.get_node(xid).unwrap()
                     {
                         self.dot_impl(io, xid, visited);
@@ -557,7 +557,6 @@ impl Dot for MddManager {
                     }
                 }
             }
-            _ => (),
         };
         visited.insert(id);
     }
