@@ -79,6 +79,7 @@ pub enum Node {
     NonTerminal(NonTerminalBDD),
     Zero,
     One,
+    Undet,
 }
 
 impl Node {
@@ -87,6 +88,7 @@ impl Node {
             Self::NonTerminal(x) => x.id(),
             Self::Zero => 0,
             Self::One => 1,
+            Self::Undet => 2,
         }
     }
 
@@ -103,6 +105,7 @@ pub struct BddManager {
     nodes: Vec<Node>,
     zero: NodeId,
     one: NodeId,
+    undet: NodeId,
     utable: HashMap<(HeaderId, NodeId, NodeId), NodeId>,
     cache: HashMap<(Operation, NodeId, NodeId), NodeId>,
 }
@@ -124,14 +127,14 @@ impl DDForest for BddManager {
     fn level(&self, id: NodeId) -> Option<Level> {
         self.get_node(id).and_then(|node| match node {
             Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.level()),
-            Node::Zero | Node::One => None,
+            Node::Zero | Node::One | Node::Undet => None,
         })
     }
 
     fn label(&self, id: NodeId) -> Option<&str> {
         self.get_node(id).and_then(|node| match node {
             Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.label()),
-            Node::Zero | Node::One => None,
+            Node::Zero | Node::One | Node::Undet => None,
         })
     }
 }
@@ -154,6 +157,13 @@ impl BddManager {
             debug_assert!(id == nodes[id].id());
             id
         };
+        let undet = {
+            let undetnode = Node::Undet;
+            let id = undetnode.id();
+            nodes.push(undetnode);
+            debug_assert!(id == nodes[id].id());
+            id
+        };
         let utable = HashMap::default();
         let cache = HashMap::default();
         Self {
@@ -161,6 +171,7 @@ impl BddManager {
             nodes,
             zero,
             one,
+            undet,
             utable,
             cache,
         }
@@ -234,7 +245,8 @@ impl BddManager {
                 let low = self.not(f0);
                 let high = self.not(f1);
                 self.create_node(headerid, low, high)
-            }
+            },
+            Node::Undet => self.undet,
         };
         self.cache.insert(key, result);
         result
@@ -277,6 +289,8 @@ impl BddManager {
                 let high = self.and(f1, g1);
                 self.create_node(headerid, low, high)
             }
+            (Node::Undet, _) => self.undet,
+            (_, Node::Undet) => self.undet,
         };
         self.cache.insert(key, result);
         result
@@ -319,6 +333,8 @@ impl BddManager {
                 let high = self.or(f1, g1);
                 self.create_node(headerid, low, high)
             }
+            (Node::Undet, _) => self.undet,
+            (_, Node::Undet) => self.undet,
         };
         self.cache.insert(key, result);
         result
@@ -363,6 +379,8 @@ impl BddManager {
                 let high = self.xor(f1, g1);
                 self.create_node(headerid, low, high)
             }
+            (Node::Undet, _) => self.undet,
+            (_, Node::Undet) => self.undet,
         };
         self.cache.insert(key, result);
         result
@@ -408,6 +426,10 @@ impl Dot for BddManager {
         }
         let node = self.get_node(id).unwrap();
         match node {
+            Node::Undet => {
+                let s = format!("\"obj{}\" [shape=square, label=\"?\"];\n", id);
+                io.write_all(s.as_bytes()).unwrap();
+            }
             Node::Zero => {
                 let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", id);
                 io.write_all(s.as_bytes()).unwrap();
@@ -424,9 +446,11 @@ impl Dot for BddManager {
                 );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, xid) in fnode.iter().enumerate() {
-                    self.dot_impl(io, *xid, visited);
-                    let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", id, *xid, i);
-                    io.write_all(s.as_bytes()).unwrap();
+                    if let Node::One | Node::Zero | Node::NonTerminal(_) = self.get_node(*xid).unwrap() {
+                        self.dot_impl(io, *xid, visited);
+                        let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", id, *xid, i);
+                        io.write_all(s.as_bytes()).unwrap();
+                    }
                 }
             }
         };
@@ -495,7 +519,7 @@ impl BddManager {
                 visited.insert(key);
                 (tmp0.0 + tmp1.0 + 1, tmp0.1 + tmp1.1 + 2)
             }
-            Node::Zero | Node::One => {
+            Node::Zero | Node::One | Node::Undet => {
                 visited.insert(key);
                 (1, 0)
             }

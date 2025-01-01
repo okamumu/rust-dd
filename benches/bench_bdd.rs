@@ -2,11 +2,9 @@ use dd::bdd::*;
 use dd::common::*;
 use dd::nodes::*;
 // use dd::dot::*;
-use dd::gc::*;
+// use dd::gc::*;
 
 // use dd::bdd_mut::*;
-
-type Node = BddNode;
 
 fn clock<F>(s: &str, f: F)
 where
@@ -48,21 +46,21 @@ impl Print for Vec<(Vec<Binary>, Binary)> {
     }
 }
 
-fn table(dd: &Bdd, f: &Node) -> Vec<(Vec<Binary>, Binary)> {
+fn table(dd: &BddManager, f: NodeId) -> Vec<(Vec<Binary>, Binary)> {
     let mut tab = Vec::new();
     let p = Vec::new();
-    table_impl(dd, f.level().unwrap() + 1, f, &p, &mut tab);
+    table_impl(dd, dd.level(f).unwrap() + 1, f, &p, &mut tab);
     tab
 }
 
 fn table_impl(
-    dd: &Bdd,
+    dd: &BddManager,
     level: Level,
-    f: &Node,
+    f: NodeId,
     path: &[Binary],
     tab: &mut Vec<(Vec<Binary>, Binary)>,
 ) {
-    match f {
+    match dd.get_node(f).unwrap() {
         Node::Zero => {
             let mut p = path.to_vec();
             for _ in 0..level {
@@ -78,8 +76,8 @@ fn table_impl(
             tab.push((p, Binary::One));
         }
         Node::NonTerminal(fnode) => {
-            let current_level = fnode.level();
-            for (i, e) in fnode.iter().enumerate() {
+            let current_level = dd.level(f).unwrap();
+            for (i, &e) in fnode.iter().enumerate() {
                 let mut p = path.to_vec();
                 for _ in current_level..level - 1 {
                     p.push(Binary::Undet);
@@ -91,73 +89,74 @@ fn table_impl(
                 }
                 table_impl(dd, current_level, e, &p, tab);
             }
-        } // _ => (),
+        }
+        Node::Undet => ()
     };
 }
 
 fn bench_bdd1() {
     let n = 1000;
-    let mut f: Bdd = Bdd::new();
-    let h = (0..n)
+    let mut dd = BddManager::new();
+    let h: Vec<_> = (0..n)
         .into_iter()
-        .map(|i| f.header(i, &format!("x{}", i)))
-        .collect::<Vec<_>>();
-    let x = (0..n)
+        .map(|i| dd.create_header(i, &format!("x{}", i)))
+        .collect();
+    let x: Vec<_> = (0..n)
         .into_iter()
-        .map(|i| f.create_node(&h[i], &f.zero(), &f.one()))
+        .map(|i| dd.create_node(h[i], dd.zero(), dd.one()))
         .collect::<Vec<_>>();
 
-    let mut b = f.one();
+    let mut b = dd.one();
     clock("-bench bdd1-1", || {
         for i in 0..n {
-            b = f.and(&b, &x[i]);
+            b = dd.and(b, x[i]);
         }
     });
-    println!("-bdd2 node {:?}", f.size());
+    println!("-bdd2 node {:?}", dd.size());
 }
 
 fn bench_bdd2() {
     let n = 1000;
-    let mut f: Bdd = Bdd::new();
+    let mut f = BddManager::new();
     let mut b = f.one();
     clock("-bench bdd2-1", || {
         let h = (0..n)
             .into_iter()
-            .map(|i| f.header(i, &format!("x{}", i)))
+            .map(|i| f.create_header(i, &format!("x{}", i)))
             .collect::<Vec<_>>();
         let x = (0..n)
             .into_iter()
-            .map(|i| f.create_node(&h[i], &f.zero(), &f.one()))
+            .map(|i| f.create_node(h[i], f.zero(), f.one()))
             .collect::<Vec<_>>();
 
         for i in (0..n).rev() {
-            b = f.and(&b, &x[i]);
+            b = f.and(b, x[i]);
         }
     });
     println!("-bdd2 node {:?}", f.size());
-    clock("-bench bdd2-2", || {
-        f.clear_cache();
-        f.gc(&vec![b.clone()]);
-    });
-    println!("-bdd2 node {:?}", f.size());
+    // clock("-bench bdd2-2", || {
+    //     f.clear_cache();
+    //     f.gc(&vec![b.clone()]);
+    // });
+    // println!("-bdd2 node {:?}", f.size());
 }
 
 fn bench_bdd3() {
     let n = 3;
-    let mut f: Bdd = Bdd::new();
+    let mut f = BddManager::new();
     let h = (0..n)
         .into_iter()
-        .map(|i| f.header(i, &format!("x{}", i)))
+        .map(|i| f.create_header(i, &format!("x{}", i)))
         .collect::<Vec<_>>();
     let x = (0..n)
         .into_iter()
-        .map(|i| f.create_node(&h[i], &f.zero(), &f.one()))
+        .map(|i| f.create_node(h[i], f.zero(), f.one()))
         .collect::<Vec<_>>();
 
-    let b = f.and(&x[0], &x[1]);
-    let b = f.or(&b, &x[2]);
+    let b = f.and(x[0], x[1]);
+    let b = f.or(b, x[2]);
     println!("   bdd2 node {:?}", f.size());
-    let result = table(&f, &b);
+    let result = table(&f, b);
     result.print();
 }
 

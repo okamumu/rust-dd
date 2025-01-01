@@ -20,17 +20,5 @@ name = "bench_mdd"
 harness = false
 
 [[bench]]
-name = "bench_evmdd"
-harness = false
-
-[[bench]]
-name = "bench_ft1"
-harness = false
-
-[[bench]]
-name = "bench_ft2"
-harness = false
-
-[[bench]]
 name = "bench_minsol"
 harness = false

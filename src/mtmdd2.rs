@@ -453,6 +453,18 @@ where
     }
 }
 
+impl<V> MtMdd2Manager<V>
+where
+    V: TerminalNumberValue,
+{
+    pub fn count(&self, node: Node) -> (u64, u64) {
+        match node {
+            Node::Value(f) => self.mtmdd.count(f),
+            Node::Bool(f) => self.mdd.count(f),
+        }
+    }
+}
+
 impl<V> Dot for MtMdd2Manager<V>
 where
     V: TerminalNumberValue,

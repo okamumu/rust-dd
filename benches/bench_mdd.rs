@@ -1,13 +1,4 @@
-// use std::hash::Hash;
-// use dd::common::{
-//     HashMap,
-// };
-// use dd::nodes::{
-//     NodeHeader,
-// };
 use dd::mdd::*;
-// use dd::dot::Dot;
-use dd::gc::Gc;
 
 fn clock<F>(s: &str, f: F)
 where
@@ -21,57 +12,57 @@ where
 
 fn bench_mdd1() {
     let n = 1000;
-    let mut f: Mdd = Mdd::new();
-    let mut b = f.one();
+    let mut dd = MddManager::new();
+    let mut b = dd.one();
     {
-        let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
-        let h = (0..n)
+        let v = vec![dd.zero(), dd.zero(), dd.zero(), dd.zero(), dd.one()];
+        let h: Vec<_> = (0..n)
             .into_iter()
-            .map(|i| f.header(i, &format!("x{}", i), 5))
-            .collect::<Vec<_>>();
-        let x = (0..n)
+            .map(|i| dd.create_header(i, &format!("x{}", i), 5))
+            .collect();
+        let x: Vec<_> = (0..n)
             .into_iter()
-            .map(|i| f.node(&h[i], &v).unwrap())
-            .collect::<Vec<_>>();
+            .map(|i| dd.create_node(h[i], &v))
+            .collect();
 
         clock("-bench mdd1-1", || {
             for i in x.into_iter() {
-                b = f.and(&b, &i);
+                b = dd.and(b, i);
             }
         });
-        println!("-mdd3 node {:?}", f.size());
+        println!("-mdd3 node {:?}", dd.size());
     }
 }
 
 fn bench_mdd2() {
     let n = 1000;
-    let mut f: Mdd = Mdd::new();
+    let mut f = MddManager::new();
     let mut b = f.one();
     {
         let v = vec![f.zero(), f.zero(), f.zero(), f.zero(), f.one()];
-        let h = (0..n)
+        let h: Vec<_> = (0..n)
             .into_iter()
-            .map(|i| f.header(i, &format!("x{}", i), 5))
-            .collect::<Vec<_>>();
-        let x = (0..n)
+            .map(|i| f.create_header(i, &format!("x{}", i), 5))
+            .collect();
+        let x: Vec<_> = (0..n)
             .into_iter()
-            .map(|i| f.node(&h[i], &v).unwrap())
-            .collect::<Vec<_>>();
+            .map(|i| f.create_node(h[i], &v))
+            .collect();
 
         clock("-bench mdd2", || {
             for i in (0..n).rev() {
-                b = f.and(&b, &x[i]);
+                b = f.and(b, x[i]);
             }
         });
         println!("-mdd3 node {:?}", f.size());
     }
-    {
-        clock("-bench mdd2", || {
-            f.clear_cache();
-            f.gc(&vec![b.clone()]);
-        });
-        println!("-mdd3 node {:?}", f.size());
-    }
+    // {
+    //     clock("-bench mdd2", || {
+    //         f.clear_cache();
+    //         f.gc(&vec![b.clone()]);
+    //     });
+    //     println!("-mdd3 node {:?}", f.size());
+    // }
 }
 
 fn bench_mdd3() {
