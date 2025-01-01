@@ -220,6 +220,11 @@ impl BddManager {
     pub fn one(&self) -> NodeId {
         self.one
     }
+
+    #[inline]
+    pub fn undet(&self) -> NodeId {
+        self.undet
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
