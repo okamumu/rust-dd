@@ -126,6 +126,85 @@ pub trait DDForest {
     fn level(&self, id: NodeId) -> Option<Level>;
 }
 
+#[derive(Debug)]
+pub struct NonTerminalBDD {
+    id: NodeId,
+    header: HeaderId,
+    edges: [NodeId; 2],
+}
+
+impl NonTerminalBDD {
+    pub fn new(id: NodeId, header: HeaderId, edges: [NodeId; 2]) -> Self {
+        Self { id, header, edges }
+    }
+}
+
+impl NonTerminal for NonTerminalBDD {
+    #[inline]
+    fn id(&self) -> NodeId {
+        self.id
+    }
+
+    #[inline]
+    fn headerid(&self) -> HeaderId {
+        self.header
+    }
+
+    #[inline]
+    fn iter(&self) -> Iter<NodeId> {
+        self.edges.iter()
+    }
+}
+
+impl Index<usize> for NonTerminalBDD {
+    type Output = NodeId;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.edges[index]
+    }
+}
+
+#[derive(Debug)]
+pub struct NonTerminalMDD {
+    id: NodeId,
+    header: HeaderId,
+    nodes: Box<[NodeId]>,
+}
+
+impl NonTerminalMDD {
+    pub fn new(id: NodeId, header: HeaderId, nodes: &[NodeId]) -> Self {
+        Self {
+            id,
+            header,
+            nodes: nodes.to_vec().into_boxed_slice(),
+        }
+    }
+}
+
+impl NonTerminal for NonTerminalMDD {
+    #[inline]
+    fn id(&self) -> NodeId {
+        self.id
+    }
+
+    #[inline]
+    fn headerid(&self) -> HeaderId {
+        self.header
+    }
+
+    fn iter(&self) -> Iter<NodeId> {
+        self.nodes.iter()
+    }
+}
+
+impl Index<usize> for NonTerminalMDD {
+    type Output = NodeId;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.nodes[index]
+    }
+}
+
 // #[derive(Debug)]
 // pub struct TerminalNumber<Value> {
 //     id: NodeId,

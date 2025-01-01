@@ -1,52 +1,50 @@
 use std::hash::Hash;
-use std::ops::Index;
-use std::slice::Iter;
 
 use crate::common::{HashMap, HashSet, HeaderId, Level, NodeId};
 
 use crate::dot::Dot;
 use crate::nodes::*;
 
-#[derive(Debug)]
-pub struct NonTerminalMDD {
-    id: NodeId,
-    header: HeaderId,
-    nodes: Box<[NodeId]>,
-}
+// #[derive(Debug)]
+// pub struct NonTerminalMDD {
+//     id: NodeId,
+//     header: HeaderId,
+//     nodes: Box<[NodeId]>,
+// }
 
-impl NonTerminalMDD {
-    pub fn new(id: NodeId, header: HeaderId, nodes: &[NodeId]) -> Self {
-        Self {
-            id,
-            header,
-            nodes: nodes.to_vec().into_boxed_slice(),
-        }
-    }
-}
+// impl NonTerminalMDD {
+//     pub fn new(id: NodeId, header: HeaderId, nodes: &[NodeId]) -> Self {
+//         Self {
+//             id,
+//             header,
+//             nodes: nodes.to_vec().into_boxed_slice(),
+//         }
+//     }
+// }
 
-impl NonTerminal for NonTerminalMDD {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
+// impl NonTerminal for NonTerminalMDD {
+//     #[inline]
+//     fn id(&self) -> NodeId {
+//         self.id
+//     }
 
-    #[inline]
-    fn headerid(&self) -> HeaderId {
-        self.header
-    }
+//     #[inline]
+//     fn headerid(&self) -> HeaderId {
+//         self.header
+//     }
 
-    fn iter(&self) -> Iter<NodeId> {
-        self.nodes.iter()
-    }
-}
+//     fn iter(&self) -> Iter<NodeId> {
+//         self.nodes.iter()
+//     }
+// }
 
-impl Index<usize> for NonTerminalMDD {
-    type Output = NodeId;
+// impl Index<usize> for NonTerminalMDD {
+//     type Output = NodeId;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.nodes[index]
-    }
-}
+//     fn index(&self, index: usize) -> &Self::Output {
+//         &self.nodes[index]
+//     }
+// }
 
 #[derive(Debug)]
 pub enum Node {
@@ -101,14 +99,14 @@ impl DDForest for MddManager {
 
     fn level(&self, id: NodeId) -> Option<Level> {
         self.get_node(id).and_then(|node| match node {
-            Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.level()),
+            Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.level()),
             Node::Zero | Node::One | Node::Undet => None,
         })
     }
 
     fn label(&self, id: NodeId) -> Option<&str> {
         self.get_node(id).and_then(|node| match node {
-            Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.label()),
+            Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.label()),
             Node::Zero | Node::One | Node::Undet => None,
         })
     }

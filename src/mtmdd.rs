@@ -4,8 +4,6 @@ use crate::common::{HashMap, HashSet, HeaderId, Level, NodeId, TerminalNumberVal
 
 use crate::nodes::*;
 
-use crate::mdd::NonTerminalMDD;
-
 use crate::dot::Dot;
 
 #[derive(Debug)]

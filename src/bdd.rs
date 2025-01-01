@@ -36,45 +36,43 @@
 /// - Count: count the number of edges
 /// - Dot: output the graph in DOT format
 ///
-use std::ops::Index;
-use std::slice::Iter;
 
 use crate::common::*;
 use crate::nodes::*;
 
 use crate::dot::Dot;
 
-#[derive(Debug)]
-pub struct NonTerminalBDD {
-    id: NodeId,
-    header: HeaderId,
-    edges: [NodeId; 2],
-}
+// #[derive(Debug)]
+// pub struct NonTerminalBDD {
+//     id: NodeId,
+//     header: HeaderId,
+//     edges: [NodeId; 2],
+// }
 
-impl NonTerminal for NonTerminalBDD {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
+// impl NonTerminal for NonTerminalBDD {
+//     #[inline]
+//     fn id(&self) -> NodeId {
+//         self.id
+//     }
 
-    #[inline]
-    fn headerid(&self) -> HeaderId {
-        self.header
-    }
+//     #[inline]
+//     fn headerid(&self) -> HeaderId {
+//         self.header
+//     }
 
-    #[inline]
-    fn iter(&self) -> Iter<NodeId> {
-        self.edges.iter()
-    }
-}
+//     #[inline]
+//     fn iter(&self) -> Iter<NodeId> {
+//         self.edges.iter()
+//     }
+// }
 
-impl Index<usize> for NonTerminalBDD {
-    type Output = NodeId;
+// impl Index<usize> for NonTerminalBDD {
+//     type Output = NodeId;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.edges[index]
-    }
-}
+//     fn index(&self, index: usize) -> &Self::Output {
+//         &self.edges[index]
+//     }
+// }
 
 #[derive(Debug)]
 pub enum Node {
@@ -125,14 +123,14 @@ impl DDForest for BddManager {
 
     fn level(&self, id: NodeId) -> Option<Level> {
         self.get_node(id).and_then(|node| match node {
-            Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.level()),
+            Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.level()),
             Node::Zero | Node::One => None,
         })
     }
 
     fn label(&self, id: NodeId) -> Option<&str> {
         self.get_node(id).and_then(|node| match node {
-            Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.label()),
+            Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.label()),
             Node::Zero | Node::One => None,
         })
     }
@@ -170,11 +168,7 @@ impl BddManager {
 
     fn new_nonterminal(&mut self, headerid: HeaderId, low: NodeId, high: NodeId) -> NodeId {
         let id = self.nodes.len();
-        let node = Node::NonTerminal(NonTerminalBDD {
-            id,
-            header: headerid,
-            edges: [low, high],
-        });
+        let node = Node::NonTerminal(NonTerminalBDD::new(id, headerid, [low, high]));
         self.nodes.push(node);
         debug_assert!(id == self.nodes[id].id());
         id

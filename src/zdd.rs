@@ -20,44 +20,9 @@
 /// - one(): return the terminal node 1
 /// - size(): return the number of headers, nodes, and the size of the unique table
 ///
-use std::ops::Index;
-use std::slice::Iter;
-
 use crate::common::*;
 use crate::dot::Dot;
 use crate::nodes::*;
-
-#[derive(Debug)]
-pub struct NonTerminalBDD {
-    id: NodeId,
-    header: HeaderId,
-    edges: [NodeId; 2],
-}
-
-impl NonTerminal for NonTerminalBDD {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    #[inline]
-    fn headerid(&self) -> HeaderId {
-        self.header
-    }
-
-    #[inline]
-    fn iter(&self) -> Iter<NodeId> {
-        self.edges.iter()
-    }
-}
-
-impl Index<usize> for NonTerminalBDD {
-    type Output = NodeId;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.edges[index]
-    }
-}
 
 #[derive(Debug)]
 pub enum Node {
@@ -110,14 +75,14 @@ impl DDForest for ZddManager {
 
     fn level(&self, id: NodeId) -> Option<Level> {
         self.get_node(id).and_then(|node| match node {
-            Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.level()),
+            Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.level()),
             Node::Zero | Node::One | Node::Undet => None,
         })
     }
 
     fn label(&self, id: NodeId) -> Option<&str> {
         self.get_node(id).and_then(|node| match node {
-            Node::NonTerminal(fnode) => self.get_header(fnode.header).map(|x| x.label()),
+            Node::NonTerminal(fnode) => self.get_header(fnode.headerid()).map(|x| x.label()),
             Node::Zero | Node::One | Node::Undet => None,
         })
     }
@@ -163,11 +128,7 @@ impl ZddManager {
 
     fn new_nonterminal(&mut self, headerid: HeaderId, low: NodeId, high: NodeId) -> NodeId {
         let id = self.nodes.len();
-        let node = Node::NonTerminal(NonTerminalBDD {
-            id,
-            header: headerid,
-            edges: [low, high],
-        });
+        let node = Node::NonTerminal(NonTerminalBDD::new(id, headerid, [low, high]));
         self.nodes.push(node);
         debug_assert!(id == self.nodes[id].id());
         id
