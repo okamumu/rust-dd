@@ -11,5 +11,4 @@ pub mod mdd;
 pub mod mtmdd;
 pub mod mtmdd2;
 
-// pub mod evplus_mdd;
-
+pub mod evplus_mdd;

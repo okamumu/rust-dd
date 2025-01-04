@@ -36,7 +36,6 @@
 /// - Count: count the number of edges
 /// - Dot: output the graph in DOT format
 ///
-
 use crate::common::*;
 use crate::nodes::*;
 
@@ -250,7 +249,7 @@ impl BddManager {
                 let low = self.not(f0);
                 let high = self.not(f1);
                 self.create_node(headerid, low, high)
-            },
+            }
             Node::Undet => self.undet,
         };
         self.cache.insert(key, result);
@@ -451,7 +450,9 @@ impl Dot for BddManager {
                 );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, xid) in fnode.iter().enumerate() {
-                    if let Node::One | Node::Zero | Node::NonTerminal(_) = self.get_node(*xid).unwrap() {
+                    if let Node::One | Node::Zero | Node::NonTerminal(_) =
+                        self.get_node(*xid).unwrap()
+                    {
                         self.dot_impl(io, *xid, visited);
                         let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", id, *xid, i);
                         io.write_all(s.as_bytes()).unwrap();

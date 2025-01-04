@@ -1,8 +1,8 @@
 // use dd::common::{HashMap, HashSet, HeaderId, Level, NodeId};
-use dd::common::*;
 use dd::bdd::*;
-use dd::nodes::*;
+use dd::common::*;
 use dd::dot::*;
+use dd::nodes::*;
 
 use std::hash::Hash;
 
@@ -114,7 +114,12 @@ fn mcsvec(dd: &BddManager, f: NodeId) -> Vec<Box<[usize]>> {
     pset
 }
 
-fn without(dd: &mut BddManager, f: NodeId, g: NodeId, cache: &mut HashMap<(NodeId, NodeId), NodeId>) -> NodeId {
+fn without(
+    dd: &mut BddManager,
+    f: NodeId,
+    g: NodeId,
+    cache: &mut HashMap<(NodeId, NodeId), NodeId>,
+) -> NodeId {
     let key = (f, g);
     if let Some(&x) = cache.get(&key) {
         return x;
@@ -164,7 +169,12 @@ fn without(dd: &mut BddManager, f: NodeId, g: NodeId, cache: &mut HashMap<(NodeI
     node
 }
 
-fn minsol(dd: &mut BddManager, f: NodeId, cache: &mut HashMap<NodeId, NodeId>, cache2: &mut HashMap<(NodeId, NodeId), NodeId>) -> NodeId {
+fn minsol(
+    dd: &mut BddManager,
+    f: NodeId,
+    cache: &mut HashMap<NodeId, NodeId>,
+    cache2: &mut HashMap<(NodeId, NodeId), NodeId>,
+) -> NodeId {
     let key = f;
     if let Some(&x) = cache.get(&key) {
         return x;
@@ -243,12 +253,7 @@ where
     let result: HashMap<T, _> = labels
         .iter()
         .enumerate()
-        .map(|(i, x)| {
-            (
-                x.clone(),
-                dd.create_node(headers[i], dd.zero(), dd.one()),
-            )
-        })
+        .map(|(i, x)| (x.clone(), dd.create_node(headers[i], dd.zero(), dd.one())))
         .collect();
     result
 }

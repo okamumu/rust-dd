@@ -90,7 +90,7 @@ fn table_impl(
                 table_impl(dd, current_level, e, &p, tab);
             }
         }
-        Node::Undet => ()
+        Node::Undet => (),
     };
 }
 
