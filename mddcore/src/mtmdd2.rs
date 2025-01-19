@@ -74,6 +74,16 @@ where
     }
 
     #[inline]
+    pub fn undet_boolean(&self) -> Node {
+        Node::Bool(self.mtmdd.undet())
+    }
+
+    #[inline]
+    pub fn undet_value(&self) -> Node {
+        Node::Value(self.mtmdd.undet())
+    }
+
+    #[inline]
     pub fn create_header(&mut self, level: Level, label: &str, edge_num: usize) -> HeaderId {
         let h1 = self.mtmdd.create_header(level, label, edge_num);
         let h2 = self.mdd.create_header(level, label, edge_num);

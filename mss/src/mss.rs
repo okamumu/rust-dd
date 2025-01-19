@@ -50,7 +50,7 @@ where
     }
 
     pub fn boolean(&self, other: bool) -> MddNode<V> {
-        let mdd = self.mdd.borrow_mut();
+        let mdd = self.mdd.borrow();
         if other {
             MddNode::new(&self.mdd, mdd.one())
         } else {
@@ -62,6 +62,16 @@ where
         let mut mdd = self.mdd.borrow_mut();
         let node = mdd.value(value);
         MddNode::new(&self.mdd, node)
+    }
+
+    pub fn undet_boolean(&self) -> MddNode<V> {
+        let mdd = self.mdd.borrow();
+        MddNode::new(&self.mdd, mdd.undet_boolean())
+    }
+
+    pub fn undet_value(&self) -> MddNode<V> {
+        let mdd = self.mdd.borrow();
+        MddNode::new(&self.mdd, mdd.undet_value())
     }
 
     pub fn create_node(&self, h: HeaderId, nodes: &[MddNode<V>]) -> MddNode<V> {
@@ -88,24 +98,14 @@ where
         }
     }
 
-    // pub fn var(&self, label: &str) -> Option<MddNode<V>> {
-    //     if let Some(node) = self.vars.get(label) {
-    //         Some(node.clone())
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn get_varorder(&self) -> Vec<String> {
-    //     let mdd = self.mdd.borrow();
-    //     let mut result = vec!["?".to_string(); self.vars.len()];
-    //     for (k, v) in self.vars.iter() {
-    //         let node = mdd.get_node(v.node).unwrap();
-    //         let level = mdd.get_level(v.node);
-    //         result[level] = k.clone();
-    //     }
-    //     self.vars.keys().cloned().collect()
-    // }
+    pub fn get_varorder(&self) -> Vec<String> {
+        let mut result = vec!["?".to_string(); self.vars.len()];
+        for (k, v) in self.vars.iter() {
+            let level = v.get_level().unwrap();
+            result[level] = k.clone();
+        }
+        self.vars.keys().cloned().collect()
+    }
 
     pub fn rpn(&mut self, rpn: &str, vars: &HashMap<String, usize>) -> Result<MddNode<V>, String> {
         let mut stack = Vec::new();
@@ -353,13 +353,6 @@ where
             Node::Bool(x) => *x,
         }
     }
-
-    // pub fn get_id(&self) -> (NodeId, NodeId) {
-    //     match &self.node {
-    //         Node::Value(x) => (*x, 0),
-    //         Node::Bool(x) => (0, *x),
-    //     }
-    // }
 
     pub fn get_header(&self) -> Option<HeaderId> {
         match &self.node {

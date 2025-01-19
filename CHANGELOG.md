@@ -1,3 +1,12 @@
+## mss 0.3.1
+
+- add undet
+- add ver_order
+
+## mddcore 0.3.2
+
+- Add undet method
+
 ## mddcore 0.3.1
 
 - Change the letters for true/false
