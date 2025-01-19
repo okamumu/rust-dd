@@ -1,3 +1,7 @@
+## mddcore 0.3.1
+
+- Change the letters for true/false
+
 ## rust-dd
 
 - make workspace including the following crates:

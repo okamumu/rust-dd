@@ -14,11 +14,11 @@ impl Dot for MddManager {
         let node = self.get_node(id).unwrap();
         match node {
             Node::Zero => {
-                let s = format!("\"obj{}\" [shape=square, label=\"0\"];\n", id);
+                let s = format!("\"obj{}\" [shape=square, label=\"F\"];\n", id);
                 io.write_all(s.as_bytes()).unwrap();
             }
             Node::One => {
-                let s = format!("\"obj{}\" [shape=square, label=\"1\"];\n", id);
+                let s = format!("\"obj{}\" [shape=square, label=\"T\"];\n", id);
                 io.write_all(s.as_bytes()).unwrap();
             }
             Node::Undet => {
