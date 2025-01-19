@@ -1,0 +1,11 @@
+[package]
+name = "bddcore"
+version = "0.3.0"
+authors = ["Hiroyuki Okamura <okamu@hiroshima-u.ac.jp>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = "../common" }
+

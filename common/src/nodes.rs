@@ -87,7 +87,7 @@ pub trait DDForest {
     ///
     /// The terminal node associated with the given ID, or `None` if the ID is invalid.
     ///
-    fn get_node(&self, id: NodeId) -> Option<&Self::Node>;
+    fn get_node(&self, id: &NodeId) -> Option<&Self::Node>;
 
     /// Returns the header associated with the given ID.
     ///
@@ -99,7 +99,7 @@ pub trait DDForest {
     ///
     /// The header associated with the given ID, or `None` if the ID is invalid.
     ///
-    fn get_header(&self, id: HeaderId) -> Option<&Self::NodeHeader>;
+    fn get_header(&self, id: &HeaderId) -> Option<&Self::NodeHeader>;
 
     /// Returns the label associated with the given ID.
     ///
@@ -111,7 +111,7 @@ pub trait DDForest {
     ///
     /// The label associated with the given ID, or `None` if the ID is invalid.
     ///
-    fn label(&self, id: NodeId) -> Option<&str>;
+    fn label(&self, id: &NodeId) -> Option<&str>;
 
     /// Returns the level associated with the given ID.
     ///
@@ -123,84 +123,6 @@ pub trait DDForest {
     ///
     /// The level associated with the given ID, or `None` if the ID is invalid.
     ///
-    fn level(&self, id: NodeId) -> Option<Level>;
+    fn level(&self, id: &NodeId) -> Option<Level>;
 }
 
-#[derive(Debug)]
-pub struct NonTerminalBDD {
-    id: NodeId,
-    header: HeaderId,
-    edges: [NodeId; 2],
-}
-
-impl NonTerminalBDD {
-    pub fn new(id: NodeId, header: HeaderId, edges: [NodeId; 2]) -> Self {
-        Self { id, header, edges }
-    }
-}
-
-impl NonTerminal for NonTerminalBDD {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    #[inline]
-    fn headerid(&self) -> HeaderId {
-        self.header
-    }
-
-    #[inline]
-    fn iter(&self) -> Iter<NodeId> {
-        self.edges.iter()
-    }
-}
-
-impl Index<usize> for NonTerminalBDD {
-    type Output = NodeId;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.edges[index]
-    }
-}
-
-#[derive(Debug)]
-pub struct NonTerminalMDD {
-    id: NodeId,
-    header: HeaderId,
-    nodes: Box<[NodeId]>,
-}
-
-impl NonTerminalMDD {
-    pub fn new(id: NodeId, header: HeaderId, nodes: &[NodeId]) -> Self {
-        Self {
-            id,
-            header,
-            nodes: nodes.to_vec().into_boxed_slice(),
-        }
-    }
-}
-
-impl NonTerminal for NonTerminalMDD {
-    #[inline]
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    #[inline]
-    fn headerid(&self) -> HeaderId {
-        self.header
-    }
-
-    fn iter(&self) -> Iter<NodeId> {
-        self.nodes.iter()
-    }
-}
-
-impl Index<usize> for NonTerminalMDD {
-    type Output = NodeId;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.nodes[index]
-    }
-}
