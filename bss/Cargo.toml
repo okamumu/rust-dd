@@ -1,6 +1,6 @@
 [package]
 name = "bss"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Hiroyuki Okamura <okamu@hiroshima-u.ac.jp>"]
 edition = "2021"
 

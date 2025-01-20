@@ -357,6 +357,13 @@ where
         }
     }
 
+    pub fn get_id2(&self) -> (NodeId, NodeId) {
+        match &self.node {
+            Node::Value(x) => (*x, 0),
+            Node::Bool(x) => (0, *x),
+        }
+    }
+
     pub fn get_header(&self) -> Option<HeaderId> {
         match &self.node {
             Node::Value(x) => {
@@ -414,6 +421,41 @@ where
                 Some(header.label().to_string())
             }
         }
+    }
+
+    pub fn get_children(&self) -> Option<Vec<MddNode<V>>> {
+        match &self.node {
+            Node::Value(x) => {
+                let mddmgr = self.parent.upgrade().unwrap();
+                let mdd = mddmgr.borrow();
+                let node = mdd.mtmdd().get_node(x).unwrap();
+                match node {
+                    mtmdd::Node::Terminal(_) | mtmdd::Node::Undet => None,
+                    mtmdd::Node::NonTerminal(fnode) => {
+                        Some(fnode.iter().map(|id| MddNode::new(&mddmgr, Node::Value(*id))).collect())
+                    }
+                }
+            }
+            Node::Bool(x) => {
+                let mddmgr = self.parent.upgrade().unwrap();
+                let mdd = mddmgr.borrow();
+                let node = mdd.mdd().get_node(x).unwrap();
+                match node {
+                    mdd::Node::One | mdd::Node::Zero | mdd::Node::Undet => None,
+                    mdd::Node::NonTerminal(fnode) => {
+                        Some(fnode.iter().map(|id| MddNode::new(&mddmgr, Node::Bool(*id))).collect())
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn create_node(&self, hid: HeaderId, nodes: &[MddNode<V>]) -> MddNode<V> {
+        let mddmgr = self.parent.upgrade().unwrap();
+        let mut mdd = mddmgr.borrow_mut();
+        let xs = nodes.iter().map(|x| x.node).collect::<Vec<_>>();
+        let node = mdd.create_node(hid, &xs);
+        MddNode::new(&mddmgr, node)
     }
 
     pub fn is_boolean(&self) -> bool {

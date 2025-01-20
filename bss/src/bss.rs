@@ -221,15 +221,17 @@ impl BddNode {
         Some(header.label().to_string())
     }
 
-    pub fn get_child(&self, i: usize) -> Option<BddNode> {
+    pub fn get_children(&self) -> Option<(BddNode, BddNode)> {
         let bddmgr = self.parent.upgrade().unwrap();
         let bdd = bddmgr.borrow();
         let node = bdd.get_node(&self.node)?;
         match node {
-            Node::Zero => None,
-            Node::One => None,
-            Node::Undet => None,
-            Node::NonTerminal(fnode) => Some(BddNode::new(&bddmgr, fnode[i])),
+            Node::Zero | Node::One | Node::Undet => None,
+            Node::NonTerminal(fnode) => {
+                let f0 = BddNode::new(&bddmgr, fnode[0]);
+                let f1 = BddNode::new(&bddmgr, fnode[1]);
+                Some((f0, f1))
+            }
         }
     }
 

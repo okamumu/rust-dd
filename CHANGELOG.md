@@ -1,3 +1,9 @@
+## bss 0.3.2, mss 0.3.4
+
+- add get_children
+- add get_id2 in mss
+- create_node in mss
+
 ## mss 0.3.3
 
 - add get_varorder
