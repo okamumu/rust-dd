@@ -98,13 +98,16 @@ where
         }
     }
 
-    pub fn get_varorder(&self) -> Vec<String> {
-        let mut result = vec!["?".to_string(); self.vars.len()];
+    pub fn get_varorder(&self) -> Vec<(String, usize)> {
+        let mut result = vec![("?".to_string(), 0); self.vars.len()];
         for (k, v) in self.vars.iter() {
-            let level = v.get_level().unwrap();
-            result[level] = k.clone();
+            let headerid = v.get_header().unwrap();
+            let mdd = self.mdd.borrow();
+            let header = mdd.mtmdd().get_header(&headerid).unwrap();
+            let level = header.level() as usize;
+            result[level] = (k.clone(), header.edge_num());
         }
-        self.vars.keys().cloned().collect()
+        result
     }
 
     pub fn rpn(&mut self, rpn: &str, vars: &HashMap<String, usize>) -> Result<MddNode<V>, String> {

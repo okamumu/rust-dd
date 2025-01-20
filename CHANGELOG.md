@@ -1,3 +1,7 @@
+## mss 0.3.3
+
+- add get_varorder
+
 ## bss 0.3.1
 
 - add and, or, kofn
