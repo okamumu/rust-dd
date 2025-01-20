@@ -413,6 +413,20 @@ where
         }
     }
 
+    pub fn is_boolean(&self) -> bool {
+        match &self.node {
+            Node::Value(_) => false,
+            Node::Bool(_) => true,
+        }
+    }
+
+    pub fn is_value(&self) -> bool {
+        match &self.node {
+            Node::Value(_) => true,
+            Node::Bool(_) => false,
+        }
+    }
+
     pub fn is_zero(&self) -> bool {
         match &self.node {
             Node::Value(x) => false,

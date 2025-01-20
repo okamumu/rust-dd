@@ -1,3 +1,7 @@
+## mss 0.3.2
+
+- add is_boolean, is_value
+
 ## mss 0.3.1
 
 - add undet
