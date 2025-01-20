@@ -450,14 +450,6 @@ where
         }
     }
 
-    pub fn create_node(&self, hid: HeaderId, nodes: &[MddNode<V>]) -> MddNode<V> {
-        let mddmgr = self.parent.upgrade().unwrap();
-        let mut mdd = mddmgr.borrow_mut();
-        let xs = nodes.iter().map(|x| x.node).collect::<Vec<_>>();
-        let node = mdd.create_node(hid, &xs);
-        MddNode::new(&mddmgr, node)
-    }
-
     pub fn is_boolean(&self) -> bool {
         match &self.node {
             Node::Value(_) => false,
