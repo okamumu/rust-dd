@@ -2,6 +2,7 @@ pub mod bdd_path;
 pub mod bdd_minsol;
 pub mod bdd_prob;
 pub mod bdd_count;
+pub mod bdd_kofn;
 pub mod bss;
 
 pub mod prelude {

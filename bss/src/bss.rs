@@ -2,6 +2,7 @@ use bddcore::prelude::*;
 use crate::bdd_count;
 use crate::bdd_prob;
 use crate::bdd_minsol;
+use crate::bdd_kofn;
 use crate::bdd_path::*;
 
 use std::collections::HashMap;
@@ -162,19 +163,22 @@ impl BddMgr {
 
     pub fn and(&self, nodes: &[BddNode]) -> BddNode {
         let mut bdd = self.bdd.borrow_mut();
-        let mut result = self.one().node;
-        for node in nodes {
-            result = bdd.and(result, node.node);
-        }
+        let nodes = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
+        let result = bdd_kofn::and(&mut bdd, &nodes);
         BddNode::new(&self.bdd, result)
     }
 
     pub fn or(&self, nodes: &[BddNode]) -> BddNode {
         let mut bdd = self.bdd.borrow_mut();
-        let mut result = self.zero().node;
-        for node in nodes {
-            result = bdd.or(result, node.node);
-        }
+        let nodes = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
+        let result = bdd_kofn::or(&mut bdd, &nodes);
+        BddNode::new(&self.bdd, result)
+    }
+
+    pub fn kofn(&self, k: usize, nodes: &[BddNode]) -> BddNode {
+        let mut bdd = self.bdd.borrow_mut();
+        let nodes = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
+        let result = bdd_kofn::kofn(&mut bdd, k, &nodes);
         BddNode::new(&self.bdd, result)
     }
 
@@ -483,6 +487,36 @@ mod tests {
         let z = bss.rpn("x y & z |").unwrap();
         println!("{}", z.dot());
         println!("{:?}", z.size());
+    }
+
+    #[test]
+    fn test_kofn1() {
+        let mut bss = BddMgr::new();
+        let x = bss.defvar("x");
+        let y = bss.defvar("y");
+        let z = bss.defvar("z");
+        let f = bss.kofn(2, &vec![x, y, z]);
+        println!("{}", f.dot());
+    }
+
+    #[test]
+    fn test_and1() {
+        let mut bss = BddMgr::new();
+        let x = bss.defvar("x");
+        let y = bss.defvar("y");
+        let z = bss.defvar("z");
+        let f = bss.and(&vec![x, y, z]);
+        println!("{}", f.dot());
+    }
+
+    #[test]
+    fn test_or1() {
+        let mut bss = BddMgr::new();
+        let x = bss.defvar("x");
+        let y = bss.defvar("y");
+        let z = bss.defvar("z");
+        let f = bss.or(&vec![x, y, z]);
+        println!("{}", f.dot());
     }
 }
 

@@ -1,3 +1,7 @@
+## bss 0.3.1
+
+- add and, or, kofn
+
 ## mss 0.3.2
 
 - add is_boolean, is_value
