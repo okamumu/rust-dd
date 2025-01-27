@@ -1,4 +1,8 @@
-## bss 0.3.2, mss 0.3.5
+## mss 0.3.6
+
+- add clear_cache
+
+## mss 0.3.5
 
 - add get_children
 - add get_id2 in mss
@@ -6,10 +10,6 @@
 ## mss 0.3.3
 
 - add get_varorder
-
-## bss 0.3.1
-
-- add and, or, kofn
 
 ## mss 0.3.2
 
@@ -19,14 +19,6 @@
 
 - add undet
 - add ver_order
-
-## mddcore 0.3.2
-
-- Add undet method
-
-## mddcore 0.3.1
-
-- Change the letters for true/false
 
 ## rust-dd
 

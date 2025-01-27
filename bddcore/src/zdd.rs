@@ -131,7 +131,7 @@ impl ZddManager {
         node
     }
 
-    pub fn size(&self) -> (HeaderId, NodeId, usize) {
+    pub fn size(&self) -> (usize, usize, usize) {
         (self.headers.len(), self.nodes.len(), self.cache.len())
     }
 
@@ -158,6 +158,11 @@ impl ZddManager {
     #[inline]
     pub fn get_mut_cache(&mut self) -> &mut BddHashMap<(ZddOperation, NodeId, NodeId), NodeId> {
         &mut self.cache
+    }
+
+    #[inline]
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
     }
 }
 

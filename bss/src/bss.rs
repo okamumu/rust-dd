@@ -182,9 +182,9 @@ impl BddMgr {
         BddNode::new(&self.bdd, result)
     }
 
-    // pub fn cache_clear(&self) {
-    //     self.bdd.borrow_mut().cache_clear();
-    // }
+    pub fn clear_cache(&mut self) {
+        self.bdd.borrow_mut().clear_cache();
+    }
 }
 
 impl BddNode {

@@ -53,9 +53,14 @@ where
 
     #[inline]
     pub fn size(&self) -> (usize, usize, usize, usize) {
-        let (u1, x1, y1, z1) = self.mtmdd.size();
-        let (x2, y2, z2) = self.mdd.size();
-        (u1, x1, y1, z1 + x2 + y2 + z2)
+        let (vheader_size, vnode_size, vnode_size_val, vcache_size) = self.mtmdd.size();
+        let (_bheader_size, bnode_size, bcache_size) = self.mdd.size();
+        (
+            vheader_size,
+            vnode_size + bnode_size,
+            vnode_size_val,
+            vcache_size + bcache_size + self.vcache.len() + self.bcache.len(),
+        )
     }
 
     #[inline]
@@ -123,5 +128,13 @@ where
     #[inline]
     pub fn get_mut_bcache(&mut self) -> &mut BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId> {
         &mut self.bcache
+    }
+
+    #[inline]
+    pub fn clear_cache(&mut self) {
+        self.vcache.clear();
+        self.bcache.clear();
+        self.mtmdd.clear_cache();
+        self.mdd.clear_cache();
     }
 }

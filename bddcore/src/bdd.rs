@@ -147,8 +147,8 @@ impl BddManager {
     }
 
     #[inline]
-    pub fn size(&self) -> (HeaderId, NodeId, usize) {
-        (self.headers.len(), self.nodes.len(), self.utable.len())
+    pub fn size(&self) -> (usize, usize, usize) {
+        (self.headers.len(), self.nodes.len(), self.cache.len())
     }
 
     #[inline]
@@ -174,6 +174,11 @@ impl BddManager {
     #[inline]
     pub fn get_mut_cache(&mut self) -> &mut BddHashMap<(Operation, NodeId, NodeId), NodeId> {
         &mut self.cache
+    }
+
+    #[inline]
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
     }
 }
 

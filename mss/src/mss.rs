@@ -325,17 +325,10 @@ where
         MddNode::new(&self.mdd, result)
     }
 
-    // pub fn not(&mut self, node: &MddNode<V>) -> MddNode<V> {
-    //     let mut mdd = self.mdd.borrow_mut();
-    //     let result = mdd.not(node.node);
-    //     MddNode::new(&self.mdd, result)
-    // }
-
-    // pub fn ifelse(&mut self, cond: &MddNode<V>, then: &MddNode<V>, els: &MddNode<V>) -> MddNode<V> {
-    //     let mut mdd = self.mdd.borrow_mut();
-    //     let result = mdd.ite(cond.node, then.node, els.node);
-    //     MddNode::new(&self.mdd, result)
-    // }
+    pub fn clear_cache(&mut self) {
+        let mut mdd = self.mdd.borrow_mut();
+        mdd.clear_cache();
+    }
 }
 
 impl<V> MddNode<V>

@@ -199,4 +199,9 @@ where
     pub fn get_mut_cache(&mut self) -> &mut BddHashMap<(MtMddOperation, NodeId, NodeId), NodeId> {
         &mut self.cache
     }
+
+    #[inline]
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
+    }
 }
