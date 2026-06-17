@@ -36,6 +36,8 @@ pub struct ZddManager {
     // boundary; casts are confined to create_node and the cache helpers.
     utable: BddHashMap<(u32, u32, u32), u32>,
     cache: BddHashMap<(ZddOperation, u32, u32), u32>,
+    // Slots in `nodes` reclaimed by gc(), available for reuse (see BddManager).
+    freelist: Vec<u32>,
 }
 
 impl DDForest for ZddManager {
@@ -102,15 +104,66 @@ impl ZddManager {
             undet,
             utable,
             cache,
+            freelist: Vec::new(),
         }
     }
 
     fn new_nonterminal(&mut self, headerid: HeaderId, low: NodeId, high: NodeId) -> NodeId {
-        let id = self.nodes.len();
-        let node = Node::NonTerminal(NonTerminalBDD::new(id, headerid, [low, high]));
-        self.nodes.push(node);
+        let node = |id| Node::NonTerminal(NonTerminalBDD::new(id, headerid, [low, high]));
+        let id = if let Some(slot) = self.freelist.pop() {
+            // Recycle a slot reclaimed by a previous gc().
+            let id = slot as usize;
+            self.nodes[id] = node(id);
+            id
+        } else {
+            let id = self.nodes.len();
+            self.nodes.push(node(id));
+            id
+        };
         debug_assert!(id == self.nodes[id].id());
         id
+    }
+
+    /// Mark-and-sweep garbage collection. See `BddManager::gc` for semantics:
+    /// marks all nodes reachable from `roots` plus terminals, reclaims the rest
+    /// onto the free list, drops dead unique-table entries, flushes the cache,
+    /// and does not compact (surviving `NodeId`s stay valid). Returns the number
+    /// of slots reclaimed.
+    pub fn gc(&mut self, roots: &[NodeId]) -> usize {
+        let n = self.nodes.len();
+        let mut live = vec![false; n];
+        live[self.zero] = true;
+        live[self.one] = true;
+        live[self.undet] = true;
+
+        let mut stack: Vec<NodeId> = roots.iter().copied().filter(|&r| r < n).collect();
+        while let Some(id) = stack.pop() {
+            if live[id] {
+                continue;
+            }
+            live[id] = true;
+            if let Node::NonTerminal(fnode) = &self.nodes[id] {
+                stack.push(fnode.edge(0));
+                stack.push(fnode.edge(1));
+            }
+        }
+
+        self.utable.retain(|_, &mut v| live[v as usize]);
+        self.cache.clear();
+
+        self.freelist.clear();
+        for (id, &alive) in live.iter().enumerate() {
+            if !alive {
+                self.freelist.push(id as u32);
+            }
+        }
+        self.freelist.len()
+    }
+
+    /// Number of live (non-reclaimed) node slots, including terminals.
+    #[inline]
+    pub fn live_node_count(&self) -> usize {
+        self.nodes.len() - self.freelist.len()
     }
 
     /// Fast level lookup for the apply hot path.

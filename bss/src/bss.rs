@@ -45,6 +45,19 @@ impl BddMgr {
         self.bdd.borrow().size()
     }
 
+    /// Garbage-collect the underlying BDD.
+    ///
+    /// Keeps every defined variable plus the supplied `keep` nodes (and
+    /// everything reachable from them); reclaims the rest. Returns the number of
+    /// reclaimed node slots. Because the collector does not compact, all kept
+    /// nodes stay valid — but any `BddNode` not covered by `keep` (nor a
+    /// variable / descendant of a kept node) must no longer be used.
+    pub fn gc(&self, keep: &[&BddNode]) -> usize {
+        let mut roots: Vec<NodeId> = self.vars.values().copied().collect();
+        roots.extend(keep.iter().map(|n| n.node));
+        self.bdd.borrow_mut().gc(&roots)
+    }
+
     // zero
     pub fn zero(&self) -> BddNode {
         BddNode::new(&self.bdd, self.bdd.borrow().zero())

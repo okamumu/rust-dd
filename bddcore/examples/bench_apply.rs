@@ -151,6 +151,31 @@ fn bench_reuse(n: usize) {
     );
 }
 
+/// Churn workload: build and discard many independent BDDs on one manager.
+/// Each round builds a fresh multiplier (fresh headers => fresh, non-shared
+/// nodes), keeping nothing. With gc off the arena grows every round; with gc on
+/// each round's nodes are reclaimed and their slots recycled, so the live node
+/// count stays bounded. (The plain multiplier bench cannot show gc: all of its
+/// nodes are reachable from the output, hence live.)
+fn bench_gc(rounds: usize, n: usize, gc_on: bool) {
+    let mut dd = BddManager::new();
+    let start = Instant::now();
+    for _ in 0..rounds {
+        let _out = multiplier(&mut dd, n); // discarded
+        if gc_on {
+            dd.gc(&[]); // keep nothing
+        }
+    }
+    let elapsed = start.elapsed();
+    println!(
+        "churn gc={:<5} rounds={rounds} n={n}: {:.4}s  total_slots={} live={}",
+        gc_on,
+        elapsed.as_secs_f64(),
+        dd.size().1,
+        dd.live_node_count()
+    );
+}
+
 fn main() {
     let n: usize = std::env::args()
         .nth(1)
@@ -159,4 +184,6 @@ fn main() {
     bench_bdd(n);
     bench_zdd(18);
     bench_reuse(7);
+    bench_gc(200, 5, false);
+    bench_gc(200, 5, true);
 }

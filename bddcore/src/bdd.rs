@@ -52,6 +52,9 @@ pub struct BddManager {
     // usize at the public boundary; casts are confined to the helpers below.
     utable: BddHashMap<(u32, u32, u32), u32>,
     cache: BddHashMap<(Operation, u32, u32), u32>,
+    // Slots in `nodes` reclaimed by gc(), available for reuse. The `nodes` Vec
+    // is never shrunk (ids stay stable); freed slots are recycled instead.
+    freelist: Vec<u32>,
 }
 
 impl DDForest for BddManager {
@@ -118,15 +121,77 @@ impl BddManager {
             undet,
             utable,
             cache,
+            freelist: Vec::new(),
         }
     }
 
     fn new_nonterminal(&mut self, headerid: HeaderId, low: NodeId, high: NodeId) -> NodeId {
-        let id = self.nodes.len();
-        let node = Node::NonTerminal(NonTerminalBDD::new(id, headerid, [low, high]));
-        self.nodes.push(node);
+        let node = |id| Node::NonTerminal(NonTerminalBDD::new(id, headerid, [low, high]));
+        let id = if let Some(slot) = self.freelist.pop() {
+            // Recycle a slot reclaimed by a previous gc().
+            let id = slot as usize;
+            self.nodes[id] = node(id);
+            id
+        } else {
+            let id = self.nodes.len();
+            self.nodes.push(node(id));
+            id
+        };
         debug_assert!(id == self.nodes[id].id());
         id
+    }
+
+    /// Mark-and-sweep garbage collection.
+    ///
+    /// Marks every node reachable from `roots` (plus the three terminals) and
+    /// reclaims the rest: their slots are pushed onto the free list for reuse,
+    /// dead unique-table entries are dropped, and the operation cache is flushed
+    /// (it may reference reclaimed nodes).
+    ///
+    /// This collector does NOT compact, so the `NodeId` of any surviving node —
+    /// i.e. any root or descendant of a root — stays valid. Only nodes that are
+    /// unreachable from `roots` are freed, so callers must pass every node they
+    /// still intend to use (CUDD's "reference what you keep" contract).
+    ///
+    /// Returns the number of slots reclaimed.
+    pub fn gc(&mut self, roots: &[NodeId]) -> usize {
+        let n = self.nodes.len();
+        let mut live = vec![false; n];
+        live[self.zero] = true;
+        live[self.one] = true;
+        live[self.undet] = true;
+
+        let mut stack: Vec<NodeId> = roots.iter().copied().filter(|&r| r < n).collect();
+        while let Some(id) = stack.pop() {
+            if live[id] {
+                continue;
+            }
+            live[id] = true;
+            if let Node::NonTerminal(fnode) = &self.nodes[id] {
+                stack.push(fnode.edge(0));
+                stack.push(fnode.edge(1));
+            }
+        }
+
+        self.utable.retain(|_, &mut v| live[v as usize]);
+        self.cache.clear();
+
+        // Rebuild the free list from scratch from all dead slots (idempotent
+        // across repeated gc calls; previously-freed-and-unused slots are simply
+        // re-collected).
+        self.freelist.clear();
+        for (id, &alive) in live.iter().enumerate() {
+            if !alive {
+                self.freelist.push(id as u32);
+            }
+        }
+        self.freelist.len()
+    }
+
+    /// Number of live (non-reclaimed) node slots, including terminals.
+    #[inline]
+    pub fn live_node_count(&self) -> usize {
+        self.nodes.len() - self.freelist.len()
     }
 
     /// Fast level lookup for the apply hot path.
