@@ -228,8 +228,8 @@ impl BddNode {
         match node {
             Node::Zero | Node::One | Node::Undet => None,
             Node::NonTerminal(fnode) => {
-                let f0 = BddNode::new(&bddmgr, fnode[0]);
-                let f1 = BddNode::new(&bddmgr, fnode[1]);
+                let f0 = BddNode::new(&bddmgr, fnode.edge(0));
+                let f1 = BddNode::new(&bddmgr, fnode.edge(1));
                 Some((f0, f1))
             }
         }

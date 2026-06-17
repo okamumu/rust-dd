@@ -15,8 +15,8 @@ pub fn minsol(
         Node::One => dd.one(),
         Node::NonTerminal(fnode) => {
             let headerid = fnode.headerid();
-            let f0 = fnode[0];
-            let f1 = fnode[1];
+            let f0 = fnode.edge(0);
+            let f1 = fnode.edge(1);
             let tmp = minsol(dd, f1, cache1, cache2);
             let high = without(dd, tmp, f0, cache2);
             let low = minsol(dd, f0, cache1, cache2);
@@ -57,8 +57,8 @@ pub fn minsol(
 //                 result_stack.push(result.clone());
 //             }
 //             bdd::BddNode::NonTerminal(fnode) => {
-//                 next_stack.push(&fnode[0]);
-//                 next_stack.push(&fnode[1]);
+//                 next_stack.push(&fnode.edge(0));
+//                 next_stack.push(&fnode.edge(1));
 //                 next_stack.push(fnode);
 //             }
 //         }
@@ -71,9 +71,9 @@ pub fn minsol(
 //                 bdd::BddNode::Zero => dd.zero(),
 //                 bdd::BddNode::One => dd.one(),
 //                 bdd::BddNode::NonTerminal(fnode) => {
-//                     let tmp = minsol(dd, &fnode[1], cache1, cache2);
-//                     let high = without_stack(dd, &tmp, &fnode[0], cache2);
-//                     let low = minsol(dd, &fnode[0], cache1, cache2);
+//                     let tmp = minsol(dd, &fnode.edge(1), cache1, cache2);
+//                     let high = without_stack(dd, &tmp, &fnode.edge(0), cache2);
+//                     let low = minsol(dd, &fnode.edge(0), cache1, cache2);
 //                     dd.create_node(fnode.header(), &low, &high)
 //                 }
 //             };
@@ -125,8 +125,8 @@ pub fn minsol(
 //                     }
 //                     (bdd::BddNode::One, bdd::BddNode::NonTerminal(gnode)) => {
 //                         next_stack.push(BddStackValue::BddHeader(key, gnode.header()));
-//                         next_stack.push(BddStackValue::Bdd2(f, &gnode[1]));
-//                         next_stack.push(BddStackValue::Bdd2(f, &gnode[0]));
+//                         next_stack.push(BddStackValue::Bdd2(f, &gnode.edge(1)));
+//                         next_stack.push(BddStackValue::Bdd2(f, &gnode.edge(0)));
 //                     }
 //                     (bdd::BddNode::NonTerminal(fnode), bdd::BddNode::NonTerminal(gnode))
 //                         if fnode.id() == gnode.id() =>
@@ -139,18 +139,18 @@ pub fn minsol(
 //                         if fnode.level() > gnode.level() =>
 //                     {
 //                         next_stack.push(BddStackValue::BddHeader(key, fnode.header()));
-//                         next_stack.push(BddStackValue::Bdd2(&fnode[1], g));
-//                         next_stack.push(BddStackValue::Bdd2(&fnode[0], g));
+//                         next_stack.push(BddStackValue::Bdd2(&fnode.edge(1), g));
+//                         next_stack.push(BddStackValue::Bdd2(&fnode.edge(0), g));
 //                     }
 //                     (bdd::BddNode::NonTerminal(fnode), bdd::BddNode::NonTerminal(gnode))
 //                         if fnode.level() < gnode.level() =>
 //                     {
-//                         next_stack.push(BddStackValue::Bdd2(f, &gnode[0]));
+//                         next_stack.push(BddStackValue::Bdd2(f, &gnode.edge(0)));
 //                     }
 //                     (bdd::BddNode::NonTerminal(fnode), bdd::BddNode::NonTerminal(gnode)) => {
 //                         next_stack.push(BddStackValue::BddHeader(key, fnode.header()));
-//                         next_stack.push(BddStackValue::Bdd2(&fnode[1], &gnode[1]));
-//                         next_stack.push(BddStackValue::Bdd2(&fnode[0], &gnode[0]));
+//                         next_stack.push(BddStackValue::Bdd2(&fnode.edge(1), &gnode.edge(1)));
+//                         next_stack.push(BddStackValue::Bdd2(&fnode.edge(0), &gnode.edge(0)));
 //                     }
 //                 }
 //             }
@@ -179,7 +179,7 @@ fn without(
         (_, Node::One) => dd.zero(),
         (Node::One, Node::NonTerminal(gnode)) => {
             let headerid = gnode.headerid();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let low = without(dd, f, gnodeid[0], cache);
             let high = without(dd, f, gnodeid[1], cache);
             dd.create_node(headerid, low, high)
@@ -189,18 +189,18 @@ fn without(
         }
         (Node::NonTerminal(fnode), Node::NonTerminal(_gnode)) if dd.level(&f) > dd.level(&g) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             let low = without(dd, fnodeid[0], g, cache);
             let high = without(dd, fnodeid[1], g, cache);
             dd.create_node(headerid, low, high)
         }
         (Node::NonTerminal(_fnode), Node::NonTerminal(gnode)) if dd.level(&f) < dd.level(&g) => {
-            without(dd, f, gnode[0], cache)
+            without(dd, f, gnode.edge(0), cache)
         }
         (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let low = without(dd, fnodeid[0], gnodeid[0], cache);
             let high = without(dd, fnodeid[1], gnodeid[1], cache);
             dd.create_node(headerid, low, high)

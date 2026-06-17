@@ -18,7 +18,7 @@ impl BddManager {
         }
         let result = match self.get_node(&f).unwrap() {
             Node::NonTerminal(fnode) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.not(f0);
                 let high = self.not(f1);
@@ -44,7 +44,7 @@ impl BddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.and(f0, g);
                 let high = self.and(f1, g);
@@ -53,15 +53,15 @@ impl BddManager {
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = gnode.headerid();
                 let low = self.and(f, g0);
                 let high = self.and(f, g1);
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.and(f0, g0);
                 let high = self.and(f1, g1);
@@ -90,7 +90,7 @@ impl BddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.or(f0, g);
                 let high = self.or(f1, g);
@@ -99,15 +99,15 @@ impl BddManager {
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = gnode.headerid();
                 let low = self.or(f, g0);
                 let high = self.or(f, g1);
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.or(f0, g0);
                 let high = self.or(f1, g1);
@@ -141,7 +141,7 @@ impl BddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.xor(f0, g);
                 let high = self.xor(f1, g);
@@ -150,15 +150,15 @@ impl BddManager {
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = gnode.headerid();
                 let low = self.xor(f, g0);
                 let high = self.xor(f, g1);
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.xor(f0, g0);
                 let high = self.xor(f1, g1);

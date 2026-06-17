@@ -34,8 +34,8 @@ where
         Node::NonTerminal(fnode) => {
             let x = dd.label(&node).unwrap();
             let fp = *pv.get(x).unwrap_or(&T::from(0.0));
-            let low = prob(dd, fnode[0], pv, ss, cache);
-            let high = prob(dd, fnode[1], pv, ss, cache);
+            let low = prob(dd, fnode.edge(0), pv, ss, cache);
+            let high = prob(dd, fnode.edge(1), pv, ss, cache);
             (T::from(1.0) - fp) * low + fp * high
         }
         Node::Undet => panic!("Undetermined node"),
@@ -66,20 +66,20 @@ where
                 let x = dd.label(&f).unwrap();
                 let p = *env.get(x).unwrap_or(&T::from(0.0));
                 let barp = T::from(1.0) - p;
-                let result0 = if let Some(&val) = gradcache.get(&fnode[0]) {
+                let result0 = if let Some(&val) = gradcache.get(&fnode.edge(0)) {
                     val + w * barp
                 } else {
                     w * barp
                 };
-                gradcache.insert(fnode[0], result0);
-                let result1 = if let Some(&val) = gradcache.get(&fnode[1]) {
+                gradcache.insert(fnode.edge(0), result0);
+                let result1 = if let Some(&val) = gradcache.get(&fnode.edge(1)) {
                     val + w * p
                 } else {
                     w * p
                 };
-                gradcache.insert(fnode[1], result1);
-                let p0 = prob(dd, fnode[0], env, ss, &mut bddcache);
-                let p1 = prob(dd, fnode[1], env, ss, &mut bddcache);
+                gradcache.insert(fnode.edge(1), result1);
+                let p0 = prob(dd, fnode.edge(0), env, ss, &mut bddcache);
+                let p1 = prob(dd, fnode.edge(1), env, ss, &mut bddcache);
                 let resultv = if let Some(&val) = gradevent.get(x) {
                     val + w * (p1 - p0)
                 } else {
@@ -131,7 +131,7 @@ fn visit(
             match dd.get_node(&x).unwrap() {
                 Node::Zero | Node::One | Node::Undet => (),
                 Node::NonTerminal(fnode) => {
-                    for &m in fnode.iter() {
+                    for m in fnode.iter() {
                         queue.push_back(m);
                         visit(dd, m, check, result, queue);
                     }

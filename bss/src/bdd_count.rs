@@ -29,8 +29,8 @@ where
             (T::from(0), T::from(1), T::from(1))
         }
         Node::NonTerminal(fnode) => {
-            let (n0, v0, e0): (T, T, T) = node_count(dd, fnode[0], cache);
-            let (n1, v1, e1): (T, T, T) = node_count(dd, fnode[1], cache);
+            let (n0, v0, e0): (T, T, T) = node_count(dd, fnode.edge(0), cache);
+            let (n1, v1, e1): (T, T, T) = node_count(dd, fnode.edge(1), cache);
             (n0 + n1 + T::from(1), v0 + v1, e0 + e1 + T::from(1))
         }
     };
@@ -69,21 +69,21 @@ where
         Node::NonTerminal(fnode) => {
             let mut result = T::from(0);
             let current_level = dd.level(&node).unwrap();
-            if let Some(next_level) = dd.level(&fnode[0]) {
+            if let Some(next_level) = dd.level(&fnode.edge(0)) {
                 result = result
                     + power(T::from(2), current_level - next_level - 1)
-                        * bdd_count(dd, ss, fnode[0], cache);
+                        * bdd_count(dd, ss, fnode.edge(0), cache);
             } else {
                 result =
-                    result + power(T::from(2), current_level) * bdd_count(dd, ss, fnode[0], cache);
+                    result + power(T::from(2), current_level) * bdd_count(dd, ss, fnode.edge(0), cache);
             }
-            if let Some(next_level) = dd.level(&fnode[1]) {
+            if let Some(next_level) = dd.level(&fnode.edge(1)) {
                 result = result
                     + power(T::from(2), current_level - next_level - 1)
-                        * bdd_count(dd, ss, fnode[1], cache);
+                        * bdd_count(dd, ss, fnode.edge(1), cache);
             } else {
                 result =
-                    result + power(T::from(2), current_level) * bdd_count(dd, ss, fnode[1], cache);
+                    result + power(T::from(2), current_level) * bdd_count(dd, ss, fnode.edge(1), cache);
             }
             result
         }
@@ -122,7 +122,7 @@ where
             }
         }
         Node::NonTerminal(fnode) => {
-            zdd_count(dd, ss, fnode[0], cache) + zdd_count(dd, ss, fnode[1], cache)
+            zdd_count(dd, ss, fnode.edge(0), cache) + zdd_count(dd, ss, fnode.edge(1), cache)
         }
         Node::Undet => T::from(0),
     };

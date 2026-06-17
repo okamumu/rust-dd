@@ -59,10 +59,10 @@ impl Iterator for BddPath {
                             let x = &self.labels[level.unwrap()];
                             let level = level.and_then(|x| x.checked_sub(1));
                             self.next_stack.push(BddStackValue::Pop);
-                            self.next_stack.push(BddStackValue::Node(level, fnode[1]));
+                            self.next_stack.push(BddStackValue::Node(level, fnode.edge(1)));
                             self.next_stack.push(BddStackValue::Push(x.to_string()));
                             self.next_stack.push(BddStackValue::Pop);
-                            self.next_stack.push(BddStackValue::Node(level, fnode[0]));
+                            self.next_stack.push(BddStackValue::Node(level, fnode.edge(0)));
                             self.next_stack.push(BddStackValue::Push(format!("~{}", x)));
                         }
                         Node::Zero if level == None => {
@@ -181,9 +181,9 @@ impl Iterator for ZddPath {
                     Node::NonTerminal(fnode) => {
                         let x = dd.borrow().label(&node).unwrap().to_string();
                         self.next_stack.push(ZddStackValue::Pop);
-                        self.next_stack.push(ZddStackValue::Node(fnode[1]));
+                        self.next_stack.push(ZddStackValue::Node(fnode.edge(1)));
                         self.next_stack.push(ZddStackValue::Push(x));
-                        self.next_stack.push(ZddStackValue::Node(fnode[0]));
+                        self.next_stack.push(ZddStackValue::Node(fnode.edge(0)));
                     }
                     Node::Undet => (),
                 },

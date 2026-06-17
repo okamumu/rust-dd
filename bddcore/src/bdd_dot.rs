@@ -35,10 +35,10 @@ impl Dot for BddManager {
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, xid) in fnode.iter().enumerate() {
                     if let Node::One | Node::Zero | Node::NonTerminal(_) =
-                        self.get_node(xid).unwrap()
+                        self.get_node(&xid).unwrap()
                     {
-                        self.dot_impl(io, xid, visited);
-                        let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", id, *xid, i);
+                        self.dot_impl(io, &xid, visited);
+                        let s = format!("\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n", id, xid, i);
                         io.write_all(s.as_bytes()).unwrap();
                     }
                 }

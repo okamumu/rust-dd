@@ -30,18 +30,18 @@ impl ZddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let f0 = fnode[0];
+                let f0 = fnode.edge(0);
                 self.intersect(f0, g)
             }
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let g0 = gnode[0];
+                let g0 = gnode.edge(0);
                 self.intersect(f, g0)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.intersect(f0, g0);
                 let high = self.intersect(f1, g1);
@@ -67,14 +67,14 @@ impl ZddManager {
             (_, Node::Zero) => f,
             (Node::One, Node::One) => self.one(),
             (Node::NonTerminal(fnode), Node::One) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.union(f0, self.one());
                 let high = f1;
                 self.create_node(headerid, low, high)
             }
             (Node::One, Node::NonTerminal(gnode)) => {
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = gnode.headerid();
                 let low = self.union(self.one(), g0);
                 let high = g1;
@@ -83,7 +83,7 @@ impl ZddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.union(f0, g);
                 let high = f1;
@@ -92,15 +92,15 @@ impl ZddManager {
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = gnode.headerid();
                 let low = self.union(f, g0);
                 let high = g1;
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.union(f0, g0);
                 let high = self.union(f1, g1);
@@ -131,20 +131,20 @@ impl ZddManager {
             (_, Node::Zero) => f,
             (Node::One, Node::One) => self.zero(),
             (Node::NonTerminal(fnode), Node::One) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.setdiff(f0, self.one());
                 let high = f1;
                 self.create_node(headerid, low, high)
             }
             (Node::One, Node::NonTerminal(gnode)) => {
-                let g0 = gnode[0];
+                let g0 = gnode.edge(0);
                 self.setdiff(self.one(), g0)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.setdiff(f0, g);
                 let high = f1;
@@ -153,12 +153,12 @@ impl ZddManager {
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let g0 = gnode[0];
+                let g0 = gnode.edge(0);
                 self.setdiff(f, g0)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.setdiff(f0, g0);
                 let high = self.setdiff(f1, g1);
@@ -184,7 +184,7 @@ impl ZddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let (f0, f1) = (fnode[0], fnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.product(f0, g);
                 let high = self.product(f1, g);
@@ -193,15 +193,15 @@ impl ZddManager {
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
                 if self.node_level(f) < self.node_level(g) =>
             {
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = gnode.headerid();
                 let low = self.product(f, g0);
                 let high = self.product(f, g1);
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let headerid = fnode.headerid();
                 let low = self.product(f0, g0);
                 let high = self.product(f1, g1);
@@ -231,7 +231,7 @@ impl ZddManager {
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
                 if self.node_level(f) > self.node_level(g) =>
             {
-                let f0 = fnode[0];
+                let f0 = fnode.edge(0);
                 self.divide(f0, g)
             }
             (Node::NonTerminal(_fnode), Node::NonTerminal(_gnode))
@@ -240,8 +240,8 @@ impl ZddManager {
                 self.undet()
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
-                let (f0, f1) = (fnode[0], fnode[1]);
-                let (g0, g1) = (gnode[0], gnode[1]);
+                let (f0, f1) = (fnode.edge(0), fnode.edge(1));
+                let (g0, g1) = (gnode.edge(0), gnode.edge(1));
                 let x = self.divide(f0, g0);
                 let y = self.divide(f1, g1);
                 self.intersect(x, y)
