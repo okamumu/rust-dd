@@ -4,7 +4,7 @@ use crate::mtmdd;
 use crate::nodes::MddValue;
 use crate::mtmdd2_ops::MtMdd2Operation;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Node {
     Value(NodeId),
     Bool(NodeId),

@@ -11,26 +11,102 @@ use crate::mdd_count;
 use crate::mdd_path::MddPath;
 use crate::mdd_path::ZMddPath;
 
+/// Minimum live-node count at which automatic gc may fire.
+const GC_FLOOR: usize = 1 << 16;
+
+/// State shared between an `MddMgr` and all of its `MddNode` handles, enabling
+/// reference-counted gc roots. Keyed by the tagged `Node` (the value and bool
+/// sub-forests have independent id spaces). Not generic over `V`.
+#[derive(Debug)]
+struct GcState {
+    roots: BddHashMap<Node, u32>,
+    /// Auto-gc fires once live occupancy reaches this; re-armed to 2x the
+    /// surviving live set (but never below `floor`) after each collection.
+    threshold: usize,
+    floor: usize,
+}
+
+/// Fire a garbage collection if live occupancy has reached the threshold.
+/// Must be called only when no `MtMdd2Manager` borrow is held.
+fn maybe_gc<V>(mdd: &Rc<RefCell<MtMdd2Manager<V>>>, gc: &Rc<RefCell<GcState>>)
+where
+    V: MddValue,
+{
+    if mdd.borrow().live_node_count() < gc.borrow().threshold {
+        return;
+    }
+    let roots: Vec<Node> = gc.borrow().roots.keys().copied().collect();
+    let live = {
+        let mut m = mdd.borrow_mut();
+        m.gc(&roots);
+        m.live_node_count()
+    };
+    let mut s = gc.borrow_mut();
+    s.threshold = live.saturating_mul(2).max(s.floor);
+}
+
 pub struct MddMgr<V> {
     mdd: Rc<RefCell<MtMdd2Manager<V>>>,
+    gc: Rc<RefCell<GcState>>,
     vars: HashMap<String, MddNode<V>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MddNode<V> {
     parent: Weak<RefCell<MtMdd2Manager<V>>>,
+    gc: Weak<RefCell<GcState>>,
     node: Node,
+}
+
+impl<V> MddNode<V> {
+    fn from_weak(
+        parent: Weak<RefCell<MtMdd2Manager<V>>>,
+        gc: Weak<RefCell<GcState>>,
+        node: Node,
+    ) -> Self {
+        if let Some(g) = gc.upgrade() {
+            *g.borrow_mut().roots.entry(node).or_insert(0) += 1;
+        }
+        MddNode { parent, gc, node }
+    }
+
+    fn new(parent: &Rc<RefCell<MtMdd2Manager<V>>>, gc: &Rc<RefCell<GcState>>, node: Node) -> Self {
+        Self::from_weak(Rc::downgrade(parent), Rc::downgrade(gc), node)
+    }
+}
+
+impl<V> Clone for MddNode<V> {
+    fn clone(&self) -> Self {
+        MddNode::from_weak(self.parent.clone(), self.gc.clone(), self.node)
+    }
+}
+
+impl<V> Drop for MddNode<V> {
+    fn drop(&mut self) {
+        if let Some(g) = self.gc.upgrade() {
+            let mut s = g.borrow_mut();
+            if let Some(c) = s.roots.get_mut(&self.node) {
+                *c -= 1;
+                if *c == 0 {
+                    s.roots.remove(&self.node);
+                }
+            }
+        }
+    }
 }
 
 impl<V> MddNode<V>
 where
     V: MddValue,
 {
-    fn new(parent: &Rc<RefCell<MtMdd2Manager<V>>>, node: Node) -> Self {
-        MddNode {
-            parent: Rc::downgrade(&parent),
-            node,
+    /// Wrap a node freshly computed by an op on `self`, then let the collector
+    /// run (safe here: no manager borrow is held, and the result is pinned).
+    fn rewrap(&self, mdd: &Rc<RefCell<MtMdd2Manager<V>>>, node: Node) -> Self {
+        let n = MddNode::from_weak(self.parent.clone(), self.gc.clone(), node);
+        if let Some(gc) = self.gc.upgrade() {
+            maybe_gc(mdd, &gc);
         }
+        n
     }
 }
 
@@ -41,12 +117,39 @@ where
     pub fn new() -> Self {
         MddMgr {
             mdd: Rc::new(RefCell::new(MtMdd2Manager::new())),
+            gc: Rc::new(RefCell::new(GcState {
+                roots: BddHashMap::default(),
+                threshold: GC_FLOOR,
+                floor: GC_FLOOR,
+            })),
             vars: HashMap::new(),
         }
     }
 
     pub fn size(&self) -> (usize, usize, usize, usize) {
         self.mdd.borrow().size()
+    }
+
+    /// Live-node count at which automatic gc fires (for tuning / tests). The
+    /// collector re-arms to 2x the surviving live set after each run, but never
+    /// below this value.
+    pub fn set_gc_threshold(&self, threshold: usize) {
+        let mut s = self.gc.borrow_mut();
+        s.threshold = threshold;
+        s.floor = threshold;
+    }
+
+    /// Current number of live (non-reclaimed) nodes across both sub-forests.
+    pub fn live_node_count(&self) -> usize {
+        self.mdd.borrow().live_node_count()
+    }
+
+    /// Wrap a freshly produced node into a pinned handle and give the collector
+    /// a chance to run. Call only with no `MtMdd2Manager` borrow held.
+    fn wrap(&self, node: Node) -> MddNode<V> {
+        let n = MddNode::new(&self.mdd, &self.gc, node);
+        maybe_gc(&self.mdd, &self.gc);
+        n
     }
 
     /// Garbage-collect the underlying MtMdd2 forest.
@@ -57,58 +160,61 @@ where
     /// so kept nodes stay valid — but any `MddNode` not covered by `keep` (nor a
     /// variable / descendant of a kept node) must no longer be used.
     pub fn gc(&self, keep: &[&MddNode<V>]) -> (usize, usize) {
-        let mut roots: Vec<Node> = self.vars.values().map(|n| n.node).collect();
+        // All live handles (including variables) are pinned roots already; the
+        // explicit `keep` is accepted for API symmetry but is redundant.
+        let mut roots: Vec<Node> = self.gc.borrow().roots.keys().copied().collect();
         roots.extend(keep.iter().map(|n| n.node));
         self.mdd.borrow_mut().gc(&roots)
     }
 
     pub fn boolean(&self, other: bool) -> MddNode<V> {
-        let mdd = self.mdd.borrow();
-        if other {
-            MddNode::new(&self.mdd, mdd.one())
-        } else {
-            MddNode::new(&self.mdd, mdd.zero())
-        }
+        let node = {
+            let mdd = self.mdd.borrow();
+            if other {
+                mdd.one()
+            } else {
+                mdd.zero()
+            }
+        };
+        self.wrap(node)
     }
 
     pub fn value(&self, value: V) -> MddNode<V> {
-        let mut mdd = self.mdd.borrow_mut();
-        let node = mdd.value(value);
-        MddNode::new(&self.mdd, node)
+        let node = self.mdd.borrow_mut().value(value);
+        self.wrap(node)
     }
 
     pub fn undet_boolean(&self) -> MddNode<V> {
-        let mdd = self.mdd.borrow();
-        MddNode::new(&self.mdd, mdd.undet_boolean())
+        let node = self.mdd.borrow().undet_boolean();
+        self.wrap(node)
     }
 
     pub fn undet_value(&self) -> MddNode<V> {
-        let mdd = self.mdd.borrow();
-        MddNode::new(&self.mdd, mdd.undet_value())
+        let node = self.mdd.borrow().undet_value();
+        self.wrap(node)
     }
 
     pub fn create_node(&self, h: HeaderId, nodes: &[MddNode<V>]) -> MddNode<V> {
-        let mut mdd = self.mdd.borrow_mut();
         let xs = nodes.iter().map(|x| x.node).collect::<Vec<_>>();
-        let node = mdd.create_node(h, &xs);
-        MddNode::new(&self.mdd, node)
+        let node = self.mdd.borrow_mut().create_node(h, &xs);
+        self.wrap(node)
     }
 
     pub fn defvar(&mut self, label: &str, range: usize) -> MddNode<V> {
         if let Some(node) = self.vars.get(label) {
             return node.clone();
-        } else {
-            let level = self.vars.len();
-            let result = {
-                let mut mdd = self.mdd.borrow_mut();
-                let nodes = (0..range).map(|x| mdd.value(V::from(x as i32))).collect::<Vec<_>>();
-                let h = mdd.create_header(level, label, range);
-                let node = mdd.create_node(h, &nodes);
-                MddNode::new(&self.mdd, node)
-            };
-            self.vars.insert(label.to_string(), result.clone());
-            result
         }
+        let level = self.vars.len();
+        let node = {
+            let mut mdd = self.mdd.borrow_mut();
+            let nodes = (0..range).map(|x| mdd.value(V::from(x as i32))).collect::<Vec<_>>();
+            let h = mdd.create_header(level, label, range);
+            mdd.create_node(h, &nodes)
+        };
+        // Variables stay alive for the manager's lifetime via a pinned handle.
+        let result = MddNode::new(&self.mdd, &self.gc, node);
+        self.vars.insert(label.to_string(), result.clone());
+        result
     }
 
     pub fn get_varorder(&self) -> Vec<(String, usize)> {
@@ -292,50 +398,58 @@ where
             }
         }
         if stack.len() == 1 {
-            Ok(MddNode::new(&self.mdd, stack.pop().unwrap()))
+            Ok(self.wrap(stack.pop().unwrap()))
         } else {
             Err("Invalid expression".to_string())
         }
     }
 
     pub fn and(&self, nodes: &[MddNode<V>]) -> MddNode<V> {
-        let mut mdd = self.mdd.borrow_mut();
-        let xs = nodes.iter().map(|x| &x.node).collect::<Vec<_>>();
-        let mut result = mdd.one();
-        for node in xs {
-            result = mdd.and(result, *node);
-        }
-        MddNode::new(&self.mdd, result)
+        let result = {
+            let mut mdd = self.mdd.borrow_mut();
+            let mut result = mdd.one();
+            for x in nodes {
+                result = mdd.and(result, x.node);
+            }
+            result
+        };
+        self.wrap(result)
     }
 
     pub fn or(&self, nodes: &[MddNode<V>]) -> MddNode<V> {
-        let mut mdd = self.mdd.borrow_mut();
-        let xs = nodes.iter().map(|x| &x.node).collect::<Vec<_>>();
-        let mut result = mdd.zero();
-        for node in xs {
-            result = mdd.or(result, *node);
-        }
-        MddNode::new(&self.mdd, result)
+        let result = {
+            let mut mdd = self.mdd.borrow_mut();
+            let mut result = mdd.zero();
+            for x in nodes {
+                result = mdd.or(result, x.node);
+            }
+            result
+        };
+        self.wrap(result)
     }
 
     pub fn min(&self, nodes: &[MddNode<V>]) -> MddNode<V> {
-        let mut mdd = self.mdd.borrow_mut();
-        let xs = nodes.iter().map(|x| &x.node).collect::<Vec<_>>();
-        let mut result = *xs[0];
-        for &node in xs[1..].iter() {
-            result = mdd.min(result, *node);
-        }
-        MddNode::new(&self.mdd, result)
+        let result = {
+            let mut mdd = self.mdd.borrow_mut();
+            let mut result = nodes[0].node;
+            for x in &nodes[1..] {
+                result = mdd.min(result, x.node);
+            }
+            result
+        };
+        self.wrap(result)
     }
 
     pub fn max(&self, nodes: &[MddNode<V>]) -> MddNode<V> {
-        let mut mdd = self.mdd.borrow_mut();
-        let xs = nodes.iter().map(|x| &x.node).collect::<Vec<_>>();
-        let mut result = *xs[0];
-        for &node in xs[1..].iter() {
-            result = mdd.max(result, *node);
-        }
-        MddNode::new(&self.mdd, result)
+        let result = {
+            let mut mdd = self.mdd.borrow_mut();
+            let mut result = nodes[0].node;
+            for x in &nodes[1..] {
+                result = mdd.max(result, x.node);
+            }
+            result
+        };
+        self.wrap(result)
     }
 
     pub fn clear_cache(&mut self) {
@@ -438,7 +552,19 @@ where
                 match node {
                     mtmdd::Node::Terminal(_) | mtmdd::Node::Undet => None,
                     mtmdd::Node::NonTerminal(fnode) => {
-                        Some(fnode.iter().map(|id| MddNode::new(&mddmgr, Node::Value(*id))).collect())
+                        // A borrow is held here, so pin only (no maybe_gc).
+                        Some(
+                            fnode
+                                .iter()
+                                .map(|id| {
+                                    MddNode::from_weak(
+                                        self.parent.clone(),
+                                        self.gc.clone(),
+                                        Node::Value(*id),
+                                    )
+                                })
+                                .collect(),
+                        )
                     }
                 }
             }
@@ -449,7 +575,19 @@ where
                 match node {
                     mdd::Node::One | mdd::Node::Zero | mdd::Node::Undet => None,
                     mdd::Node::NonTerminal(fnode) => {
-                        Some(fnode.iter().map(|id| MddNode::new(&mddmgr, Node::Bool(*id))).collect())
+                        // A borrow is held here, so pin only (no maybe_gc).
+                        Some(
+                            fnode
+                                .iter()
+                                .map(|id| {
+                                    MddNode::from_weak(
+                                        self.parent.clone(),
+                                        self.gc.clone(),
+                                        Node::Bool(*id),
+                                    )
+                                })
+                                .collect(),
+                        )
                     }
                 }
             }
@@ -546,119 +684,136 @@ where
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.add(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn sub(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.sub(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn mul(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.mul(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn div(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.div(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn min(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.min(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn max(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.max(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn eq(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.eq(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn ne(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.neq(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn lt(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.lt(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn le(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.lte(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn gt(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.gt(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn ge(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.gte(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn and(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.and(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn or(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.or(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn xor(&self, other: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.xor(self.node, other.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn not(&self) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.not(self.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn ite(&self, then: &MddNode<V>, els: &MddNode<V>) -> MddNode<V> {
         let mddmgr = self.parent.upgrade().unwrap();
         let mut mdd = mddmgr.borrow_mut();
         let node = mdd.ite(self.node, then.node, els.node);
-        MddNode::new(&mddmgr, node)
+        drop(mdd);
+        self.rewrap(&mddmgr, node)
     }
 
     pub fn prob<T>(&mut self, pv: &HashMap<String, Vec<T>>, ss: &[V]) -> T
@@ -679,9 +834,11 @@ where
 
     pub fn minpath(&mut self) -> MddNode<V> {
         let mgr = self.parent.upgrade().unwrap();
-        let mut mdd = mgr.borrow_mut();
-        let node = mdd_minsol::minsol(&mut mdd, &self.node);
-        MddNode::new(&mgr, node)
+        let node = {
+            let mut mdd = mgr.borrow_mut();
+            mdd_minsol::minsol(&mut mdd, &self.node)
+        };
+        self.rewrap(&mgr, node)
     }
 
     pub fn mdd_count(&self, ss: &HashSet<V>) -> u64 {
