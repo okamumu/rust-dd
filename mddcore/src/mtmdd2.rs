@@ -137,4 +137,33 @@ where
         self.mtmdd.clear_cache();
         self.mdd.clear_cache();
     }
+
+    /// Mark-and-sweep garbage collection over the composite forest.
+    ///
+    /// The value (MTMDD) and boolean (MDD) sub-forests are independent — a
+    /// `Value` node lives entirely in the MTMDD, a `Bool` node entirely in the
+    /// MDD — so roots are partitioned by tag and each sub-manager is collected
+    /// with its own roots. The two cross-manager caches are flushed as well.
+    /// Returns the slots reclaimed as `(value_forest, bool_forest)`.
+    pub fn gc(&mut self, roots: &[Node]) -> (usize, usize) {
+        let mut vroots = Vec::new();
+        let mut broots = Vec::new();
+        for r in roots {
+            match r {
+                Node::Value(f) => vroots.push(*f),
+                Node::Bool(f) => broots.push(*f),
+            }
+        }
+        self.vcache.clear();
+        self.bcache.clear();
+        let v = self.mtmdd.gc(&vroots);
+        let b = self.mdd.gc(&broots);
+        (v, b)
+    }
+
+    /// Total number of live (non-reclaimed) node slots across both sub-forests.
+    #[inline]
+    pub fn live_node_count(&self) -> usize {
+        self.mtmdd.live_node_count() + self.mdd.live_node_count()
+    }
 }

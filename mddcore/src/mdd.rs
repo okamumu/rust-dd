@@ -37,6 +37,8 @@ pub struct MddManager {
     undet: NodeId,
     utable: BddHashMap<(HeaderId, Box<[NodeId]>), NodeId>,
     cache: BddHashMap<(MddOperation, NodeId, NodeId), NodeId>,
+    // Slots in `nodes` reclaimed by gc(), available for reuse.
+    freelist: Vec<NodeId>,
 }
 
 impl DDForest for MddManager {
@@ -103,15 +105,63 @@ impl MddManager {
             undet,
             utable,
             cache,
+            freelist: Vec::new(),
         }
     }
 
     fn new_nonterminal(&mut self, header: HeaderId, nodes: &[NodeId]) -> NodeId {
-        let id = self.nodes.len();
-        let tmp = Node::NonTerminal(NonTerminalMDD::new(id, header, nodes));
-        self.nodes.push(tmp);
+        let id = if let Some(slot) = self.freelist.pop() {
+            // Recycle a slot reclaimed by a previous gc().
+            self.nodes[slot] = Node::NonTerminal(NonTerminalMDD::new(slot, header, nodes));
+            slot
+        } else {
+            let id = self.nodes.len();
+            self.nodes.push(Node::NonTerminal(NonTerminalMDD::new(id, header, nodes)));
+            id
+        };
         debug_assert!(id == self.nodes[id].id());
         id
+    }
+
+    /// Mark-and-sweep garbage collection (see `bddcore::bdd::BddManager::gc`).
+    /// Marks all nodes reachable from `roots` plus the three terminals, reclaims
+    /// the rest onto the free list, drops dead unique-table entries, and flushes
+    /// the cache. Does not compact, so surviving `NodeId`s stay valid. Returns
+    /// the number of slots reclaimed.
+    pub fn gc(&mut self, roots: &[NodeId]) -> usize {
+        let n = self.nodes.len();
+        let mut live = vec![false; n];
+        live[self.zero] = true;
+        live[self.one] = true;
+        live[self.undet] = true;
+
+        let mut stack: Vec<NodeId> = roots.iter().copied().filter(|&r| r < n).collect();
+        while let Some(id) = stack.pop() {
+            if live[id] {
+                continue;
+            }
+            live[id] = true;
+            if let Node::NonTerminal(fnode) = &self.nodes[id] {
+                stack.extend(fnode.iter().copied());
+            }
+        }
+
+        self.utable.retain(|_, &mut v| live[v]);
+        self.cache.clear();
+
+        self.freelist.clear();
+        for (id, &alive) in live.iter().enumerate() {
+            if !alive {
+                self.freelist.push(id);
+            }
+        }
+        self.freelist.len()
+    }
+
+    /// Number of live (non-reclaimed) node slots, including terminals.
+    #[inline]
+    pub fn live_node_count(&self) -> usize {
+        self.nodes.len() - self.freelist.len()
     }
 
     pub fn create_header(&mut self, level: Level, label: &str, edge_num: usize) -> HeaderId {

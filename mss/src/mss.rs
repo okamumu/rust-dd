@@ -49,6 +49,19 @@ where
         self.mdd.borrow().size()
     }
 
+    /// Garbage-collect the underlying MtMdd2 forest.
+    ///
+    /// Keeps every defined variable plus the supplied `keep` nodes (and
+    /// everything reachable from them); reclaims the rest. Returns reclaimed
+    /// slots as `(value_forest, bool_forest)`. The collector does not compact,
+    /// so kept nodes stay valid — but any `MddNode` not covered by `keep` (nor a
+    /// variable / descendant of a kept node) must no longer be used.
+    pub fn gc(&self, keep: &[&MddNode<V>]) -> (usize, usize) {
+        let mut roots: Vec<Node> = self.vars.values().map(|n| n.node).collect();
+        roots.extend(keep.iter().map(|n| n.node));
+        self.mdd.borrow_mut().gc(&roots)
+    }
+
     pub fn boolean(&self, other: bool) -> MddNode<V> {
         let mdd = self.mdd.borrow();
         if other {
