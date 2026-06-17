@@ -174,7 +174,11 @@ where
 
         self.utable.retain(|_, &mut v| live[v]);
         self.vtable.retain(|_, &mut v| live[v]);
-        self.cache.clear();
+        // Keep memoized results that only reference surviving nodes (operands
+        // and results may be value terminals, also covered by `live`); drop only
+        // entries touching a reclaimed slot.
+        self.cache
+            .retain(|k, &mut v| live[k.1] && live[k.2] && live[v]);
 
         self.freelist.clear();
         for (id, &alive) in live.iter().enumerate() {

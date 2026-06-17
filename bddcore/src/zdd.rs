@@ -149,7 +149,10 @@ impl ZddManager {
         }
 
         self.utable.retain(|_, &mut v| live[v as usize]);
-        self.cache.clear();
+        // Keep memoized results that only reference surviving nodes; drop only
+        // entries touching a reclaimed slot.
+        self.cache
+            .retain(|k, &mut v| live[k.1 as usize] && live[k.2 as usize] && live[v as usize]);
 
         self.freelist.clear();
         for (id, &alive) in live.iter().enumerate() {

@@ -174,7 +174,12 @@ impl BddManager {
         }
 
         self.utable.retain(|_, &mut v| live[v as usize]);
-        self.cache.clear();
+        // Keep memoized results that only reference surviving nodes (gc does not
+        // compact, so their ids stay valid); drop only entries touching a
+        // reclaimed slot. (`not` keys are `(Not, f, 0)`; slot 0 is the zero
+        // terminal, always live.)
+        self.cache
+            .retain(|k, &mut v| live[k.1 as usize] && live[k.2 as usize] && live[v as usize]);
 
         // Rebuild the free list from scratch from all dead slots (idempotent
         // across repeated gc calls; previously-freed-and-unused slots are simply

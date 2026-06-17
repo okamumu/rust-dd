@@ -1,6 +1,38 @@
 use bddcore::prelude::*;
 
 #[test]
+fn bdd_gc_retains_live_cache_entries() {
+    let mut dd = BddManager::new();
+    let hx = dd.create_header(0, "x");
+    let hy = dd.create_header(1, "y");
+    let hz = dd.create_header(2, "z");
+    let (z0, o1) = (dd.zero(), dd.one());
+    let x = dd.create_node(hx, z0, o1);
+    let y = dd.create_node(hy, z0, o1);
+    let zz = dd.create_node(hz, z0, o1);
+
+    let a = dd.and(x, y); // lives (we keep it)
+    let _b = dd.or(x, zz); // dies once zz is unreachable
+
+    let cache_before = dd.size().2;
+    assert!(cache_before > 0);
+
+    let reclaimed = dd.gc(&[a, x, y]); // keep a, x, y; zz and b become garbage
+    assert!(reclaimed > 0);
+
+    let cache_after = dd.size().2;
+    // Entries whose operands+result all survive are kept (a full flush would
+    // leave 0); entries touching a reclaimed node are dropped.
+    assert!(cache_after > 0, "live cache entries must be retained, not flushed");
+    assert!(
+        cache_after < cache_before,
+        "entries touching reclaimed nodes must be dropped"
+    );
+    // The kept memoized op is still consistent (now served from the cache).
+    assert_eq!(dd.and(x, y), a);
+}
+
+#[test]
 fn bdd_gc_keeps_roots_and_reclaims_rest() {
     let mut dd = BddManager::new();
     let hx = dd.create_header(0, "x");
