@@ -11,22 +11,97 @@ use std::cell::RefCell;
 use std::rc::Weak;
 use std::ops::{Add, Sub, Mul};
 
-pub struct BddMgr {
-    bdd: Rc<RefCell<BddManager>>,
-    vars: HashMap<String, NodeId>,
+/// Minimum live-node count at which automatic gc may fire.
+const GC_FLOOR: usize = 1 << 16;
+
+/// State shared between a `BddMgr` and all of its `BddNode` handles, enabling
+/// reference-counted gc roots: every live handle pins its node here, so the key
+/// set is exactly the set of external roots.
+#[derive(Debug)]
+struct GcState {
+    roots: BddHashMap<NodeId, u32>,
+    /// Auto-gc fires once live occupancy reaches this; re-armed to 2x the
+    /// surviving live set (but never below `floor`) after each collection.
+    threshold: usize,
+    /// Lower bound for `threshold` (configurable via `set_gc_threshold`).
+    floor: usize,
 }
 
-#[derive(Debug, Clone)]
+/// Fire a garbage collection if live occupancy has reached the threshold.
+///
+/// Must be called only when no `BddManager` borrow is held (it borrows the
+/// manager) — i.e. at the boundary of a wrapper op, after the result has been
+/// wrapped in a (pinned) `BddNode` so it is protected as a root.
+fn maybe_gc(bdd: &Rc<RefCell<BddManager>>, gc: &Rc<RefCell<GcState>>) {
+    if bdd.borrow().live_node_count() < gc.borrow().threshold {
+        return;
+    }
+    let roots: Vec<NodeId> = gc.borrow().roots.keys().copied().collect();
+    let live = {
+        let mut b = bdd.borrow_mut();
+        b.gc(&roots);
+        b.live_node_count()
+    };
+    let mut s = gc.borrow_mut();
+    s.threshold = live.saturating_mul(2).max(s.floor);
+}
+
+pub struct BddMgr {
+    bdd: Rc<RefCell<BddManager>>,
+    gc: Rc<RefCell<GcState>>,
+    vars: HashMap<String, BddNode>,
+}
+
+#[derive(Debug)]
 pub struct BddNode {
     parent: Weak<RefCell<BddManager>>,
+    gc: Weak<RefCell<GcState>>,
     node: NodeId,
 }
 
 impl BddNode {
-    pub fn new(bdd: &Rc<RefCell<BddManager>>, node: NodeId) -> Self {
-        BddNode {
-            parent: Rc::downgrade(bdd),
-            node: node,
+    pub fn new(bdd: &Rc<RefCell<BddManager>>, gc: &Rc<RefCell<GcState>>, node: NodeId) -> Self {
+        Self::from_weak(Rc::downgrade(bdd), Rc::downgrade(gc), node)
+    }
+
+    fn from_weak(
+        parent: Weak<RefCell<BddManager>>,
+        gc: Weak<RefCell<GcState>>,
+        node: NodeId,
+    ) -> Self {
+        if let Some(g) = gc.upgrade() {
+            *g.borrow_mut().roots.entry(node).or_insert(0) += 1;
+        }
+        BddNode { parent, gc, node }
+    }
+
+    /// Wrap a node freshly computed by an op on `self`, then let the collector
+    /// run (safe here: no manager borrow is held, and the result is now pinned).
+    fn rewrap(&self, bdd: &Rc<RefCell<BddManager>>, node: NodeId) -> BddNode {
+        let n = BddNode::from_weak(self.parent.clone(), self.gc.clone(), node);
+        if let Some(gc) = self.gc.upgrade() {
+            maybe_gc(bdd, &gc);
+        }
+        n
+    }
+}
+
+impl Clone for BddNode {
+    fn clone(&self) -> Self {
+        BddNode::from_weak(self.parent.clone(), self.gc.clone(), self.node)
+    }
+}
+
+impl Drop for BddNode {
+    fn drop(&mut self) {
+        if let Some(g) = self.gc.upgrade() {
+            let mut s = g.borrow_mut();
+            if let Some(c) = s.roots.get_mut(&self.node) {
+                *c -= 1;
+                if *c == 0 {
+                    s.roots.remove(&self.node);
+                }
+            }
         }
     }
 }
@@ -36,8 +111,35 @@ impl BddMgr {
     pub fn new() -> Self {
         BddMgr {
             bdd: Rc::new(RefCell::new(BddManager::new())),
+            gc: Rc::new(RefCell::new(GcState {
+                roots: BddHashMap::default(),
+                threshold: GC_FLOOR,
+                floor: GC_FLOOR,
+            })),
             vars: HashMap::default(),
         }
+    }
+
+    /// Live-node count at which automatic gc fires (for tuning / tests). The
+    /// collector re-arms to 2x the surviving live set after each run, but never
+    /// below this value.
+    pub fn set_gc_threshold(&self, threshold: usize) {
+        let mut s = self.gc.borrow_mut();
+        s.threshold = threshold;
+        s.floor = threshold;
+    }
+
+    /// Current number of live (non-reclaimed) nodes in the underlying manager.
+    pub fn live_node_count(&self) -> usize {
+        self.bdd.borrow().live_node_count()
+    }
+
+    /// Wrap a freshly produced node into a pinned handle and give the collector
+    /// a chance to run. Call only with no `BddManager` borrow held.
+    fn wrap(&self, node: NodeId) -> BddNode {
+        let n = BddNode::new(&self.bdd, &self.gc, node);
+        maybe_gc(&self.bdd, &self.gc);
+        n
     }
 
     // size
@@ -53,48 +155,53 @@ impl BddMgr {
     /// nodes stay valid — but any `BddNode` not covered by `keep` (nor a
     /// variable / descendant of a kept node) must no longer be used.
     pub fn gc(&self, keep: &[&BddNode]) -> usize {
-        let mut roots: Vec<NodeId> = self.vars.values().copied().collect();
+        // All live handles (including variables) are pinned roots already; the
+        // explicit `keep` is accepted for API symmetry but is redundant.
+        let mut roots: Vec<NodeId> = self.gc.borrow().roots.keys().copied().collect();
         roots.extend(keep.iter().map(|n| n.node));
         self.bdd.borrow_mut().gc(&roots)
     }
 
     // zero
     pub fn zero(&self) -> BddNode {
-        BddNode::new(&self.bdd, self.bdd.borrow().zero())
+        let z = self.bdd.borrow().zero();
+        self.wrap(z)
     }
 
     // one
     pub fn one(&self) -> BddNode {
-        BddNode::new(&self.bdd, self.bdd.borrow().one())
+        let o = self.bdd.borrow().one();
+        self.wrap(o)
     }
 
     pub fn create_node(&self, h: HeaderId, x0: &BddNode, x1: &BddNode) -> BddNode {
-        let f0 = x0.node;
-        let f1 = x1.node;
-        BddNode::new(&self.bdd, self.bdd.borrow_mut().create_node(h, f0, f1))
+        let result = self.bdd.borrow_mut().create_node(h, x0.node, x1.node);
+        self.wrap(result)
     }
 
     // defvar
     pub fn defvar(&mut self, var: &str) -> BddNode {
         if let Some(node) = self.vars.get(var) {
-            return BddNode::new(&self.bdd, *node);
-        } else {
-            let level = self.vars.len();
+            return node.clone();
+        }
+        let level = self.vars.len();
+        let node = {
             let mut bdd = self.bdd.borrow_mut();
             let h = bdd.create_header(level, var);
-            let x0 = bdd.zero();
-            let x1 = bdd.one();
-            let node = bdd.create_node(h, x0, x1);
-            self.vars.insert(var.to_string(), node);
-            BddNode::new(&self.bdd, node)
-        }
+            let (x0, x1) = (bdd.zero(), bdd.one());
+            bdd.create_node(h, x0, x1)
+        };
+        // Variables stay alive for the manager's lifetime via a pinned handle.
+        let bnode = BddNode::new(&self.bdd, &self.gc, node);
+        self.vars.insert(var.to_string(), bnode.clone());
+        bnode
     }
 
     pub fn get_varorder(&self) -> Vec<String> {
         let bdd = self.bdd.borrow();
         let mut result = vec!["?".to_string(); self.vars.len()];
         for (k, v) in self.vars.iter() {
-            let node = bdd.get_node(v).unwrap();
+            let node = bdd.get_node(&v.node).unwrap();
             let hid = node.headerid().unwrap();
             let header = bdd.get_header(&hid).unwrap();
             result[header.level()] = k.clone();
@@ -168,31 +275,28 @@ impl BddMgr {
             }
         }
         if stack.len() == 1 {
-            return Ok(BddNode::new(&self.bdd, stack.pop().unwrap()));
+            return Ok(self.wrap(stack.pop().unwrap()));
         } else {
             return Err("Invalid expression".to_string());
         }
     }
 
     pub fn and(&self, nodes: &[BddNode]) -> BddNode {
-        let mut bdd = self.bdd.borrow_mut();
-        let nodes = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
-        let result = bdd_kofn::and(&mut bdd, &nodes);
-        BddNode::new(&self.bdd, result)
+        let ids = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
+        let result = bdd_kofn::and(&mut self.bdd.borrow_mut(), &ids);
+        self.wrap(result)
     }
 
     pub fn or(&self, nodes: &[BddNode]) -> BddNode {
-        let mut bdd = self.bdd.borrow_mut();
-        let nodes = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
-        let result = bdd_kofn::or(&mut bdd, &nodes);
-        BddNode::new(&self.bdd, result)
+        let ids = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
+        let result = bdd_kofn::or(&mut self.bdd.borrow_mut(), &ids);
+        self.wrap(result)
     }
 
     pub fn kofn(&self, k: usize, nodes: &[BddNode]) -> BddNode {
-        let mut bdd = self.bdd.borrow_mut();
-        let nodes = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
-        let result = bdd_kofn::kofn(&mut bdd, k, &nodes);
-        BddNode::new(&self.bdd, result)
+        let ids = nodes.iter().map(|x| x.node).collect::<Vec<NodeId>>();
+        let result = bdd_kofn::kofn(&mut self.bdd.borrow_mut(), k, &ids);
+        self.wrap(result)
     }
 
     pub fn clear_cache(&mut self) {
@@ -241,8 +345,9 @@ impl BddNode {
         match node {
             Node::Zero | Node::One | Node::Undet => None,
             Node::NonTerminal(fnode) => {
-                let f0 = BddNode::new(&bddmgr, fnode.edge(0));
-                let f1 = BddNode::new(&bddmgr, fnode.edge(1));
+                // A `bdd` borrow is held here, so pin only (no maybe_gc).
+                let f0 = BddNode::from_weak(self.parent.clone(), self.gc.clone(), fnode.edge(0));
+                let f1 = BddNode::from_weak(self.parent.clone(), self.gc.clone(), fnode.edge(1));
                 Some((f0, f1))
             }
         }
@@ -287,31 +392,31 @@ impl BddNode {
     pub fn and(&self, other: &BddNode) -> BddNode {
         let bdd = self.parent.upgrade().unwrap();
         let result = bdd.borrow_mut().and(self.node, other.node);
-        BddNode::new(&bdd, result)
+        self.rewrap(&bdd, result)
     }
 
     pub fn or(&self, other: &BddNode) -> BddNode {
         let bdd = self.parent.upgrade().unwrap();
         let result = bdd.borrow_mut().or(self.node, other.node);
-        BddNode::new(&bdd, result)
+        self.rewrap(&bdd, result)
     }
 
     pub fn xor(&self, other: &BddNode) -> BddNode {
         let bdd = self.parent.upgrade().unwrap();
         let result = bdd.borrow_mut().xor(self.node, other.node);
-        BddNode::new(&bdd, result)
+        self.rewrap(&bdd, result)
     }
 
     pub fn not(&self) -> BddNode {
         let bdd = self.parent.upgrade().unwrap();
         let result = bdd.borrow_mut().not(self.node);
-        BddNode::new(&bdd, result)
+        self.rewrap(&bdd, result)
     }
 
     pub fn ite(&self, then: &BddNode, else_: &BddNode) -> BddNode {
         let bdd = self.parent.upgrade().unwrap();
         let result = bdd.borrow_mut().ite(self.node, then.node, else_.node);
-        BddNode::new(&bdd, result)
+        self.rewrap(&bdd, result)
     }
 
     pub fn eq(&self, other: &BddNode) -> bool {
@@ -347,7 +452,7 @@ impl BddNode {
         let mut cache1 = BddHashMap::default();
         let mut cache2 = BddHashMap::default();
         let result = bdd_minsol::minsol(&mut bdd.borrow_mut(), self.node, &mut cache1, &mut cache2);
-        BddNode::new(&bdd, result)
+        self.rewrap(&bdd, result)
     }
 
     pub fn bdd_count(&self, ss: &[bool]) -> u64 {
