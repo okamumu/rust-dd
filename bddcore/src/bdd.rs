@@ -46,8 +46,12 @@ pub struct BddManager {
     zero: NodeId,
     one: NodeId,
     undet: NodeId,
-    utable: BddHashMap<(HeaderId, NodeId, NodeId), NodeId>,
-    cache: BddHashMap<(Operation, NodeId, NodeId), NodeId>,
+    // Keys/values are stored as u32 (node and header counts fit comfortably in
+    // 32 bits): halves the memory of these two large tables and the bytes hashed
+    // per lookup, which dominate apply on big diagrams. NodeId/HeaderId stay
+    // usize at the public boundary; casts are confined to the helpers below.
+    utable: BddHashMap<(u32, u32, u32), u32>,
+    cache: BddHashMap<(Operation, u32, u32), u32>,
 }
 
 impl DDForest for BddManager {
@@ -125,6 +129,19 @@ impl BddManager {
         id
     }
 
+    /// Fast level lookup for the apply hot path.
+    ///
+    /// Returns the node's level (non-terminals) or a sentinel `Level::MAX` for
+    /// terminals (terminals sit below all variables). Drops the `Option`
+    /// wrapping of `DDForest::level` in the inner apply comparisons.
+    #[inline]
+    pub(crate) fn node_level(&self, id: NodeId) -> Level {
+        match &self.nodes[id] {
+            Node::NonTerminal(fnode) => self.headers[fnode.headerid()].level(),
+            _ => Level::MAX,
+        }
+    }
+
     pub fn create_header(&mut self, level: Level, label: &str) -> HeaderId {
         let headerid = self.headers.len();
         let header = NodeHeader::new(headerid, level, label, 2);
@@ -137,12 +154,12 @@ impl BddManager {
         if low == high {
             return low;
         }
-        let key = (header, low, high);
-        if let Some(nodeid) = self.utable.get(&key) {
-            return *nodeid;
+        let key = (header as u32, low as u32, high as u32);
+        if let Some(&nodeid) = self.utable.get(&key) {
+            return nodeid as NodeId;
         }
         let node = self.new_nonterminal(header, low, high);
-        self.utable.insert(key, node);
+        self.utable.insert(key, node as u32);
         node
     }
 
@@ -166,14 +183,16 @@ impl BddManager {
         self.undet
     }
 
+    /// Look up a memoized apply result. Casts the u32-stored value back to NodeId.
     #[inline]
-    pub fn get_cache(&self) -> &BddHashMap<(Operation, NodeId, NodeId), NodeId> {
-        &self.cache
+    pub(crate) fn cache_get(&self, key: &(Operation, u32, u32)) -> Option<NodeId> {
+        self.cache.get(key).map(|&v| v as NodeId)
     }
 
+    /// Memoize an apply result, storing it narrowed to u32.
     #[inline]
-    pub fn get_mut_cache(&mut self) -> &mut BddHashMap<(Operation, NodeId, NodeId), NodeId> {
-        &mut self.cache
+    pub(crate) fn cache_put(&mut self, key: (Operation, u32, u32), val: NodeId) {
+        self.cache.insert(key, val as u32);
     }
 
     #[inline]

@@ -31,8 +31,11 @@ pub struct ZddManager {
     zero: NodeId,
     one: NodeId,
     undet: NodeId,
-    utable: BddHashMap<(HeaderId, NodeId, NodeId), NodeId>,
-    cache: BddHashMap<(ZddOperation, NodeId, NodeId), NodeId>,
+    // Keys/values stored as u32 (see BddManager): halves the memory and hashed
+    // bytes of these two large tables. NodeId/HeaderId stay usize at the public
+    // boundary; casts are confined to create_node and the cache helpers.
+    utable: BddHashMap<(u32, u32, u32), u32>,
+    cache: BddHashMap<(ZddOperation, u32, u32), u32>,
 }
 
 impl DDForest for ZddManager {
@@ -110,6 +113,19 @@ impl ZddManager {
         id
     }
 
+    /// Fast level lookup for the apply hot path.
+    ///
+    /// Returns the node's level (non-terminals) or a sentinel `Level::MAX` for
+    /// terminals (terminals sit below all variables). Drops the `Option`
+    /// wrapping of `DDForest::level` in the inner apply comparisons.
+    #[inline]
+    pub(crate) fn node_level(&self, id: NodeId) -> Level {
+        match &self.nodes[id] {
+            Node::NonTerminal(fnode) => self.headers[fnode.headerid()].level(),
+            _ => Level::MAX,
+        }
+    }
+
     pub fn create_header(&mut self, level: Level, label: &str) -> HeaderId {
         let id = self.headers.len();
         let tmp = NodeHeader::new(id, level, label, 2);
@@ -122,12 +138,12 @@ impl ZddManager {
         if high == self.zero {
             return low;
         }
-        let key = (header, low, high);
-        if let Some(nodeid) = self.utable.get(&key) {
-            return *nodeid;
+        let key = (header as u32, low as u32, high as u32);
+        if let Some(&nodeid) = self.utable.get(&key) {
+            return nodeid as NodeId;
         }
         let node = self.new_nonterminal(header, low, high);
-        self.utable.insert(key, node);
+        self.utable.insert(key, node as u32);
         node
     }
 
@@ -150,14 +166,16 @@ impl ZddManager {
         self.undet
     }
 
+    /// Look up a memoized result. Casts the u32-stored value back to NodeId.
     #[inline]
-    pub fn get_cache(&self) -> &BddHashMap<(ZddOperation, NodeId, NodeId), NodeId> {
-        &self.cache
+    pub(crate) fn cache_get(&self, key: &(ZddOperation, u32, u32)) -> Option<NodeId> {
+        self.cache.get(key).map(|&v| v as NodeId)
     }
 
+    /// Memoize a result, storing it narrowed to u32.
     #[inline]
-    pub fn get_mut_cache(&mut self) -> &mut BddHashMap<(ZddOperation, NodeId, NodeId), NodeId> {
-        &mut self.cache
+    pub(crate) fn cache_put(&mut self, key: (ZddOperation, u32, u32), val: NodeId) {
+        self.cache.insert(key, val as u32);
     }
 
     #[inline]

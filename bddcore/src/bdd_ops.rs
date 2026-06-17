@@ -12,9 +12,9 @@ pub enum Operation {
 
 impl BddManager {
     pub fn not(&mut self, f: NodeId) -> NodeId {
-        let key = (Operation::Not, f, 0);
-        if let Some(x) = self.get_cache().get(&key) {
-            return *x;
+        let key = (Operation::Not, f as u32, 0);
+        if let Some(x) = self.cache_get(&key) {
+            return x;
         }
         let result = match self.get_node(&f).unwrap() {
             Node::NonTerminal(fnode) => {
@@ -28,19 +28,21 @@ impl BddManager {
             Node::One => self.zero(),
             Node::Undet => self.undet(),
         };
-        self.get_mut_cache().insert(key, result);
+        self.cache_put(key, result);
         result
     }
 
     pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
-        let key = (Operation::And, f, g);
-        if let Some(x) = self.get_cache().get(&key) {
-            return *x;
+        if f == g {
+            return f;
+        }
+        let key = (Operation::And, f as u32, g as u32);
+        if let Some(x) = self.cache_get(&key) {
+            return x;
         }
         let result = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
-                if self.level(&f) > self.level(&g) =>
+                if self.node_level(f) > self.node_level(g) =>
             {
                 let (f0, f1) = (fnode[0], fnode[1]);
                 let headerid = fnode.headerid();
@@ -49,7 +51,7 @@ impl BddManager {
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
-                if self.level(&f) < self.level(&g) =>
+                if self.node_level(f) < self.node_level(g) =>
             {
                 let (g0, g1) = (gnode[0], gnode[1]);
                 let headerid = gnode.headerid();
@@ -72,19 +74,21 @@ impl BddManager {
             (Node::Undet, _) => self.undet(),
             (_, Node::Undet) => self.undet(),
         };
-        self.get_mut_cache().insert(key, result);
+        self.cache_put(key, result);
         result
     }
 
     pub fn or(&mut self, f: NodeId, g: NodeId) -> NodeId {
-        let key = (Operation::Or, f, g);
-        if let Some(x) = self.get_cache().get(&key) {
-            return *x;
+        if f == g {
+            return f;
+        }
+        let key = (Operation::Or, f as u32, g as u32);
+        if let Some(x) = self.cache_get(&key) {
+            return x;
         }
         let result = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => f,
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
-                if self.level(&f) > self.level(&g) =>
+                if self.node_level(f) > self.node_level(g) =>
             {
                 let (f0, f1) = (fnode[0], fnode[1]);
                 let headerid = fnode.headerid();
@@ -93,7 +97,7 @@ impl BddManager {
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
-                if self.level(&f) < self.level(&g) =>
+                if self.node_level(f) < self.node_level(g) =>
             {
                 let (g0, g1) = (gnode[0], gnode[1]);
                 let headerid = gnode.headerid();
@@ -116,21 +120,26 @@ impl BddManager {
             (Node::Undet, _) => self.undet(),
             (_, Node::Undet) => self.undet(),
         };
-        self.get_mut_cache().insert(key, result);
+        self.cache_put(key, result);
         result
     }
 
     pub fn xor(&mut self, f: NodeId, g: NodeId) -> NodeId {
-        let key = (Operation::XOr, f, g);
-        if let Some(x) = self.get_cache().get(&key) {
-            return *x;
+        if f == g {
+            // f xor f = 0, except undet xor undet = undet
+            return if f == self.undet() {
+                self.undet()
+            } else {
+                self.zero()
+            };
+        }
+        let key = (Operation::XOr, f as u32, g as u32);
+        if let Some(x) = self.cache_get(&key) {
+            return x;
         }
         let result = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
-            (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => {
-                self.zero()
-            }
             (Node::NonTerminal(fnode), Node::NonTerminal(_gnode))
-                if self.level(&f) > self.level(&g) =>
+                if self.node_level(f) > self.node_level(g) =>
             {
                 let (f0, f1) = (fnode[0], fnode[1]);
                 let headerid = fnode.headerid();
@@ -139,7 +148,7 @@ impl BddManager {
                 self.create_node(headerid, low, high)
             }
             (Node::NonTerminal(_fnode), Node::NonTerminal(gnode))
-                if self.level(&f) < self.level(&g) =>
+                if self.node_level(f) < self.node_level(g) =>
             {
                 let (g0, g1) = (gnode[0], gnode[1]);
                 let headerid = gnode.headerid();
@@ -162,7 +171,7 @@ impl BddManager {
             (Node::Undet, _) => self.undet(),
             (_, Node::Undet) => self.undet(),
         };
-        self.get_mut_cache().insert(key, result);
+        self.cache_put(key, result);
         result
     }
 
