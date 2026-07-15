@@ -1,10 +1,21 @@
 [package]
-name = "common"
-version = "0.3.0"
-authors = ["Hiroyuki Okamura <okamu@hiroshima-u.ac.jp>"]
-edition = "2021"
+name = "relib-common"
+description = "Shared primitives and traits for the relib decision-diagram crates (the Rust reliability-analysis engine behind the relibmss Python package)."
+keywords = ["decision-diagram", "bdd", "mdd", "reliability"]
+categories = ["data-structures", "science"]
+readme = "README.md"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "common"
 
 [dependencies]
 wyhash = "0.5.0"
+
+[package.metadata.docs.rs]
+all-features = true

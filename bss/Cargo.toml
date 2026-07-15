@@ -1,11 +1,21 @@
 [package]
-name = "bss"
-version = "0.3.3"
-authors = ["Hiroyuki Okamura <okamu@hiroshima-u.ac.jp>"]
-edition = "2021"
+name = "relib-bss"
+description = "Binary-state system (BSS) reliability analysis over BDDs: probability, path/cut enumeration, minimal solutions, k-of-n, counting. Engine behind the relibmss Python package."
+keywords = ["reliability", "bdd", "fault-tree", "minimal-cut-set"]
+categories = ["science", "data-structures"]
+readme = "README.md"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "bss"
 
 [dependencies]
-bddcore = { path = "../bddcore" }
+bddcore = { path = "../bddcore", version = "0.4.0", package = "relib-bdd" }
 
+[package.metadata.docs.rs]
+all-features = true

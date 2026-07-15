@@ -46,12 +46,23 @@ fn maybe_gc(bdd: &Rc<RefCell<BddManager>>, gc: &Rc<RefCell<GcState>>) {
     s.threshold = live.saturating_mul(2).max(s.floor);
 }
 
+/// Manager (forest owner) for building and analyzing binary structure functions.
+///
+/// Wraps the arena-based `BddManager` in `Rc<RefCell<..>>` and hands out [`BddNode`]
+/// handles. Create variables with [`BddMgr::defvar`], build expressions with
+/// [`BddMgr::rpn`] or the node operators, then evaluate with methods such as
+/// [`BddNode::prob`], [`BddNode::minpath`], or [`BddNode::bdd_count`].
 pub struct BddMgr {
     bdd: Rc<RefCell<BddManager>>,
     gc: Rc<RefCell<GcState>>,
     vars: HashMap<String, BddNode>,
 }
 
+/// A handle to a node in a [`BddMgr`]'s forest.
+///
+/// Holds a `Weak` back-reference to the manager plus the node id, and acts as a gc root
+/// while alive. Supports value-style operators (`and`/`or`/`xor`/`not`/`ite`) and
+/// analysis methods (`prob`, `minpath`, `bdd_count`, …).
 #[derive(Debug)]
 pub struct BddNode {
     parent: Weak<RefCell<BddManager>>,

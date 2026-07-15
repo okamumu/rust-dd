@@ -3,45 +3,45 @@
 version = 4
 
 [[package]]
-name = "bddcore"
-version = "0.3.1"
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+
+[[package]]
+name = "relib-bdd"
+version = "0.4.0"
 dependencies = [
- "common",
+ "relib-common",
 ]
 
 [[package]]
-name = "bss"
-version = "0.3.3"
+name = "relib-bss"
+version = "0.4.0"
 dependencies = [
- "bddcore",
+ "relib-bdd",
 ]
 
 [[package]]
-name = "common"
-version = "0.3.0"
+name = "relib-common"
+version = "0.4.0"
 dependencies = [
  "wyhash",
 ]
 
 [[package]]
-name = "mddcore"
-version = "0.3.3"
+name = "relib-mdd"
+version = "0.4.0"
 dependencies = [
- "common",
+ "relib-common",
 ]
 
 [[package]]
-name = "mss"
-version = "0.3.6"
+name = "relib-mss"
+version = "0.4.0"
 dependencies = [
- "mddcore",
+ "relib-mdd",
 ]
-
-[[package]]
-name = "rand_core"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "wyhash"
