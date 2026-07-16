@@ -1,8 +1,8 @@
-# rust-dd
+# relib-rs
 
 Decision-diagram libraries (BDD, ZDD, MDD, MTMDD, MTMDD2) and reliability-analysis
 layers built on top of them, in safe Rust. This workspace is the Rust engine behind the
-[`relibmss`](https://github.com/okamumu/relibmss) Python package: `relibmss` is the
+[`relibmss`](https://github.com/MssReliab/relibmss) Python package: `relibmss` is the
 interface for general users and students, while the crates here are meant for writing
 reliability experiments directly in Rust.
 

@@ -6,7 +6,7 @@
 //! decision-diagram engine and the analysis passes tightly integrated.
 //!
 //! It is the Rust engine behind the MSS/MDD side of the
-//! [`relibmss`](https://github.com/okamumu/relibmss) Python package. `relibmss` is the
+//! [`relibmss`](https://github.com/MssReliab/relibmss) Python package. `relibmss` is the
 //! interface for general users and students; use this crate to write reliability
 //! experiments directly in Rust.
 //!
