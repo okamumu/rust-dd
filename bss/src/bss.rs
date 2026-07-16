@@ -71,7 +71,7 @@ pub struct BddNode {
 }
 
 impl BddNode {
-    pub fn new(bdd: &Rc<RefCell<BddManager>>, gc: &Rc<RefCell<GcState>>, node: NodeId) -> Self {
+    fn new(bdd: &Rc<RefCell<BddManager>>, gc: &Rc<RefCell<GcState>>, node: NodeId) -> Self {
         Self::from_weak(Rc::downgrade(bdd), Rc::downgrade(gc), node)
     }
 
@@ -220,6 +220,47 @@ impl BddMgr {
         result
     }
 
+    /// Builds a BDD from a boolean expression in Reverse Polish Notation.
+    ///
+    /// This is the main entry point for building a diagram from a string, and it is what
+    /// the [`relibmss`](https://github.com/MssReliab/relibmss) Python layer calls. Tokens
+    /// are separated by whitespace and consumed left to right against a stack.
+    ///
+    /// # Grammar
+    ///
+    /// | Token | Arity | Meaning |
+    /// |---|---|---|
+    /// | `0`, `False` | — | constant false |
+    /// | `1`, `True` | — | constant true |
+    /// | `&` | 2 | and |
+    /// | `\|` | 2 | or |
+    /// | `^` | 2 | xor |
+    /// | `~` | 1 | not |
+    /// | `?` | 3 | if-then-else: `cond then else ?` |
+    /// | `save(id)` | — | remember the top of the stack under `id` (does not pop) |
+    /// | `load(id)` | — | push the node previously saved as `id` |
+    ///
+    /// Any other token is a **variable name** and is declared on first use via
+    /// [`defvar`](Self::defvar).
+    ///
+    /// `save` / `load` let a shared subexpression be written once and reused, so the
+    /// expression is a DAG rather than a tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if `load(id)` names something never saved, if `save(id)` is used on
+    /// an empty stack, or if the expression does not reduce to exactly one node.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bss::prelude::*;
+    ///
+    /// let mut mgr = BddMgr::new();
+    /// // (A and B) or C
+    /// let node = mgr.rpn("A B & C |").unwrap();
+    /// assert!(!node.is_zero());
+    /// ```
     pub fn rpn(&mut self, expr: &str) -> Result<BddNode, String> {
         let mut stack = Vec::new();
         let mut cache = HashMap::new();

@@ -32,7 +32,7 @@ impl NonTerminal for NonTerminalMDD {
         self.header
     }
 
-    fn iter(&self) -> Iter<NodeId> {
+    fn iter(&self) -> Iter<'_, NodeId> {
         self.nodes.iter()
     }
 }

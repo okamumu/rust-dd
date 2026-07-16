@@ -29,7 +29,7 @@ pub trait NonTerminal: Index<usize> {
     /// Returns an iterator over the children of the non-terminal node.
     ///
     /// The iterator should return the children in the order they were added.
-    fn iter(&self) -> Iter<NodeId>;
+    fn iter(&self) -> Iter<'_, NodeId>;
 }
 
 #[derive(Debug)]

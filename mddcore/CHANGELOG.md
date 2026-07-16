@@ -1,3 +1,9 @@
+## relib-mdd 0.4.0
+
+- First release on crates.io, published as `relib-mdd` (import name stays `mddcore`).
+- Add mark-and-sweep garbage collection (`gc`) across MDD / MTMDD / MTMDD2.
+- `gc` now retains live operation-cache entries rather than flushing the whole cache.
+
 ## mddcore 0.3.3
 
 - add clear_cache
@@ -10,7 +16,7 @@
 
 - Change the letters for true/false
 
-## rust-dd
+## rust-dd 0.3.0
 
 - make workspace including the following crates:
     - common v0.3.0

@@ -1,3 +1,11 @@
+## relib-bss 0.4.0
+
+- First release on crates.io, published as `relib-bss` (import name stays `bss`).
+- Add garbage collection to `BddMgr`: `gc` (mark-and-sweep), `set_gc_threshold` for
+  automatic threshold-triggered collection, and `live_node_count`.
+- Inherit the `relib-bdd` u32 node narrowing (roughly half-size BDD nodes) and the
+  `apply` hot-path short-circuit.
+
 ## bss 0.3.3
 
 - add clear_cache
@@ -11,7 +19,7 @@
 
 - add and, or, kofn
 
-## rust-dd
+## rust-dd 0.3.0
 
 - make workspace including the following crates:
     - common v0.3.0

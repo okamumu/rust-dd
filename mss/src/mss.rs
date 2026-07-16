@@ -240,6 +240,61 @@ where
         result
     }
 
+    /// Builds an MTMDD2 node from an expression in Reverse Polish Notation.
+    ///
+    /// This is the main entry point for building a diagram from a string, and it is what
+    /// the [`relibmss`](https://github.com/MssReliab/relibmss) Python layer calls. Tokens
+    /// are separated by whitespace and consumed left to right against a stack.
+    ///
+    /// `vars` maps each variable name to its **number of states**; a variable must appear
+    /// in `vars` before it can be used. Nodes are tagged as either boolean or value
+    /// (`MtMdd2` composes both), so arithmetic and comparison operators produce different
+    /// node kinds — comparisons take values and yield booleans.
+    ///
+    /// # Grammar
+    ///
+    /// | Token | Arity | Meaning |
+    /// |---|---|---|
+    /// | `True`, `False` | — | boolean constants |
+    /// | `+`, `-`, `*`, `/` | 2 | arithmetic on values |
+    /// | `min`, `max` | 2 | minimum / maximum of two values |
+    /// | `==`, `!=`, `<`, `<=`, `>`, `>=` | 2 | comparison; values in, boolean out |
+    /// | `&&`, `\|\|` | 2 | boolean and / or |
+    /// | `!` | 1 | boolean not |
+    /// | `?` | 3 | if-then-else: `cond then else ?` |
+    /// | `save(id)` | — | remember the top of the stack under `id` (does not pop) |
+    /// | `load(id)` | — | push the node previously saved as `id` |
+    ///
+    /// Any other token is parsed as an **integer literal** if it parses as `i32`,
+    /// otherwise as a **variable name** looked up in `vars`.
+    ///
+    /// `save` / `load` let a shared subexpression be written once and reused, so the
+    /// expression is a DAG rather than a tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if `load(id)` names something never saved, if `save(id)` is used on
+    /// an empty stack, or if the expression does not reduce to exactly one node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a token is neither an integer nor a key of `vars`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mss::prelude::*;
+    /// use std::collections::HashMap;
+    ///
+    /// let mut mgr: MddMgr<i32> = MddMgr::new();
+    /// let mut vars = HashMap::new();
+    /// vars.insert("x".to_string(), 3usize); // x has states 0, 1, 2
+    /// vars.insert("y".to_string(), 3usize);
+    ///
+    /// // system state is min(x, y); is it at least 1?
+    /// let node = mgr.rpn("x y min 1 >=", &vars).unwrap();
+    /// assert!(node.is_boolean());
+    /// ```
     pub fn rpn(&mut self, rpn: &str, vars: &HashMap<String, usize>) -> Result<MddNode<V>, String> {
         let mut stack = Vec::new();
         let mut cache = HashMap::new();

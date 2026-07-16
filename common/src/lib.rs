@@ -1,3 +1,30 @@
+//! Shared primitives and traits for the `relib-*` decision-diagram crates.
+//!
+//! This crate carries the type aliases ([`NodeId`](common::NodeId),
+//! [`HeaderId`](common::HeaderId), [`Level`](common::Level),
+//! [`OperationId`](common::OperationId)), the [`BddHashMap`](common::BddHashMap) /
+//! [`BddHashSet`](common::BddHashSet) aliases (std hashmaps with a `wyhash` hasher), and
+//! the core traits ([`Terminal`](nodes::Terminal), [`NonTerminal`](nodes::NonTerminal),
+//! [`NodeHeader`](nodes::NodeHeader), [`DDForest`](nodes::DDForest), [`Dot`](dot::Dot))
+//! that the DD managers implement.
+//!
+//! **This crate is not meant to be used directly.** Depend on one of the crates built on
+//! top of it instead:
+//!
+//! - [`relib-bdd`](https://crates.io/crates/relib-bdd) — BDD / ZDD engines
+//! - [`relib-mdd`](https://crates.io/crates/relib-mdd) — MDD / MTMDD / MTMDD2 engines
+//! - [`relib-bss`](https://crates.io/crates/relib-bss) — binary-state system reliability
+//! - [`relib-mss`](https://crates.io/crates/relib-mss) — multi-state system reliability
+//!
+//! The package is named `relib-common` on crates.io but the import name is `common`:
+//!
+//! ```
+//! use common::prelude::*;
+//! ```
+//!
+//! Part of the Rust engine behind the
+//! [`relibmss`](https://github.com/MssReliab/relibmss) Python package.
+
 pub mod common;
 pub mod dot;
 pub mod nodes;

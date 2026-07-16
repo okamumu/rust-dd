@@ -1,8 +1,17 @@
+## relib-bdd 0.4.0
+
+- First release on crates.io, published as `relib-bdd` (import name stays `bddcore`).
+- Add mark-and-sweep garbage collection (`gc`) with a free list, so nodes unreachable
+  from the roots are reclaimed instead of growing the arena forever.
+- `gc` now retains live operation-cache entries rather than flushing the whole cache.
+- Narrow `NonTerminalBDD` fields and the unique/cache tables to `u32`, halving node size.
+- Add a hot-path short-circuit in `apply`.
+
 ## bddcore 0.3.1
 
 - add clear_cache
 
-## rust-dd
+## rust-dd 0.3.0
 
 - make workspace including the following crates:
     - common v0.3.0

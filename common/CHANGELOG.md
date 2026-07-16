@@ -1,4 +1,9 @@
-## rust-dd
+## relib-common 0.4.0
+
+- First release on crates.io, published as `relib-common` (import name stays `common`).
+- No API change from 0.3.0.
+
+## rust-dd 0.3.0
 
 - make workspace including the following crates:
     - common v0.3.0

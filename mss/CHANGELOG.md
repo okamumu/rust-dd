@@ -1,3 +1,10 @@
+## relib-mss 0.4.0
+
+- First release on crates.io, published as `relib-mss` (import name stays `mss`).
+- Add garbage collection to `MddMgr`: `gc` (mark-and-sweep), `set_gc_threshold` for
+  automatic threshold-triggered collection, and `live_node_count`.
+- Inherit the `relib-mdd` mark-and-sweep gc across MDD / MTMDD / MTMDD2.
+
 ## mss 0.3.6
 
 - add clear_cache
@@ -20,7 +27,7 @@
 - add undet
 - add ver_order
 
-## rust-dd
+## rust-dd 0.3.0
 
 - make workspace including the following crates:
     - common v0.3.0
