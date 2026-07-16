@@ -1,11 +1,21 @@
 [package]
-name = "mss"
-version = "0.3.6"
-authors = ["Hiroyuki Okamura <okamu@hiroshima-u.ac.jp>"]
-edition = "2021"
+name = "relib-mss"
+description = "Multi-state system (MSS) reliability analysis over MTMDD2: state probability, minimal path/cut vectors, counting. Rust engine behind the relibmss Python package."
+keywords = ["reliability", "mdd", "multi-state", "minimal-vector"]
+categories = ["science", "data-structures"]
+readme = "README.md"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "mss"
 
 [dependencies]
-mddcore = { path = "../mddcore" }
+mddcore = { path = "../mddcore", version = "0.4.0", package = "relib-mdd" }
 
+[package.metadata.docs.rs]
+all-features = true

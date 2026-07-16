@@ -45,12 +45,23 @@ where
     s.threshold = live.saturating_mul(2).max(s.floor);
 }
 
+/// Manager (forest owner) for building and analyzing multi-state structure functions.
+///
+/// Wraps the arena-based `MtMdd2Manager<V>` in `Rc<RefCell<..>>` and hands out
+/// [`MddNode`] handles. Create variables with [`MddMgr::defvar`], build expressions with
+/// [`MddMgr::rpn`] or the node operators, then evaluate with methods such as
+/// [`MddNode::prob`], [`MddNode::minpath`], or [`MddNode::mdd_count`].
 pub struct MddMgr<V> {
     mdd: Rc<RefCell<MtMdd2Manager<V>>>,
     gc: Rc<RefCell<GcState>>,
     vars: HashMap<String, MddNode<V>>,
 }
 
+/// A handle to a node in an [`MddMgr`]'s forest.
+///
+/// Holds a `Weak` back-reference to the manager plus the node id, and acts as a gc root
+/// while alive. Supports value-style operators (`add`/`mul`/`min`/`max`/…) and analysis
+/// methods (`prob`, `minpath`, `mdd_count`, …).
 #[derive(Debug)]
 pub struct MddNode<V> {
     parent: Weak<RefCell<MtMdd2Manager<V>>>,
