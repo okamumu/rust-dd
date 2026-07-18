@@ -39,6 +39,7 @@
 use common::prelude::*;
 use crate::nodes::*;
 use crate::bdd_ops::Operation;
+use crate::compute_cache::ComputeCache;
 
 pub struct BddManager {
     headers: Vec<NodeHeader>,
@@ -51,7 +52,10 @@ pub struct BddManager {
     // per lookup, which dominate apply on big diagrams. NodeId/HeaderId stay
     // usize at the public boundary; casts are confined to the helpers below.
     utable: BddHashMap<(u32, u32, u32), u32>,
-    cache: BddHashMap<(Operation, u32, u32), u32>,
+    // Direct-mapped, lossy computed table (CUDD-style): an array store/load per
+    // apply instead of a growing HashMap's probe + periodic rehash. Safe because
+    // the cache is a memoization hint (a miss only recomputes). See compute_cache.rs.
+    cache: ComputeCache,
     // Slots in `nodes` reclaimed by gc(), available for reuse. The `nodes` Vec
     // is never shrunk (ids stay stable); freed slots are recycled instead.
     freelist: Vec<u32>,
@@ -112,7 +116,7 @@ impl BddManager {
             id
         };
         let utable = BddHashMap::default();
-        let cache = BddHashMap::default();
+        let cache = ComputeCache::new();
         Self {
             headers,
             nodes,
@@ -178,8 +182,7 @@ impl BddManager {
         // compact, so their ids stay valid); drop only entries touching a
         // reclaimed slot. (`not` keys are `(Not, f, 0)`; slot 0 is the zero
         // terminal, always live.)
-        self.cache
-            .retain(|k, &mut v| live[k.1 as usize] && live[k.2 as usize] && live[v as usize]);
+        self.cache.retain_live(&live);
 
         // Rebuild the free list from scratch from all dead slots (idempotent
         // across repeated gc calls; previously-freed-and-unused slots are simply
@@ -256,13 +259,13 @@ impl BddManager {
     /// Look up a memoized apply result. Casts the u32-stored value back to NodeId.
     #[inline]
     pub(crate) fn cache_get(&self, key: &(Operation, u32, u32)) -> Option<NodeId> {
-        self.cache.get(key).map(|&v| v as NodeId)
+        self.cache.get(key.0.code(), key.1, key.2).map(|v| v as NodeId)
     }
 
     /// Memoize an apply result, storing it narrowed to u32.
     #[inline]
     pub(crate) fn cache_put(&mut self, key: (Operation, u32, u32), val: NodeId) {
-        self.cache.insert(key, val as u32);
+        self.cache.put(key.0.code(), key.1, key.2, val as u32);
     }
 
     #[inline]

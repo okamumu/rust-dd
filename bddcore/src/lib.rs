@@ -28,6 +28,7 @@ pub mod nodes;
 
 pub mod bdd;
 pub mod bdd_ops;
+mod compute_cache;
 pub mod bdd_dot;
 
 pub mod zdd;

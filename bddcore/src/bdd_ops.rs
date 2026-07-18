@@ -10,6 +10,19 @@ pub enum Operation {
     Not,
 }
 
+impl Operation {
+    /// Compact code for use as a computed-table key word.
+    #[inline]
+    pub(crate) fn code(&self) -> u32 {
+        match self {
+            Operation::And => 0,
+            Operation::Or => 1,
+            Operation::XOr => 2,
+            Operation::Not => 3,
+        }
+    }
+}
+
 impl BddManager {
     pub fn not(&mut self, f: NodeId) -> NodeId {
         let key = (Operation::Not, f as u32, 0);
