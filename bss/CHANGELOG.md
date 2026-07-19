@@ -1,3 +1,12 @@
+## relib-bss 0.4.1
+
+- Fix exponential-time `BddMgr::kofn`: the naive Shannon recursion never memoized
+  the `(k, index)` subproblems, so it made `O(2^n)` recursive calls despite the
+  polynomial-size result (n=24 took ~40 ms). Memoize on `(k, start)` → `O(n·k)`
+  (n=24 now ~0.15 ms). The result BDD is unchanged (canonical); also fixes a
+  `usize` underflow that panicked on `kofn(0, ..)`.
+- Inherit the `relib-bdd` computed-table speedup (no API change).
+
 ## relib-bss 0.4.0
 
 - First release on crates.io, published as `relib-bss` (import name stays `bss`).

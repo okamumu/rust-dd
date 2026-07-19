@@ -1,3 +1,11 @@
+## relib-bdd 0.4.1
+
+- Replace the growing `HashMap` operation cache with a fixed, direct-mapped,
+  lossy computed table (CUDD-style): one array load/store per `apply` instead of
+  probing plus periodic rehash. The cache is a memoization hint, so a lossy array
+  is safe; `gc` invalidates entries that reference reclaimed slots. Near-parity
+  with CUDD on large-DD workloads in the `bdd-bench` comparison. No API change.
+
 ## relib-bdd 0.4.0
 
 - First release on crates.io, published as `relib-bdd` (import name stays `bddcore`).

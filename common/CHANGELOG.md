@@ -1,3 +1,7 @@
+## relib-common 0.4.1
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-common 0.4.0
 
 - First release on crates.io, published as `relib-common` (import name stays `common`).

@@ -1,3 +1,7 @@
+## relib-mss 0.4.1
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-mss 0.4.0
 
 - First release on crates.io, published as `relib-mss` (import name stays `mss`).
