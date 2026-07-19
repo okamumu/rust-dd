@@ -1,3 +1,15 @@
+## relib-mdd 0.5.1
+
+- Store node ids/children as `u32` (like `relib-bdd`): `NonTerminalMDD` becomes
+  `{ id: u32, header: u32, nodes: Box<[u32]> }` and the MDD/MTMDD unique tables
+  become `(u32, Box<[u32]>) -> u32`, with `u32` freelists/vtable. Halves the id
+  bytes stored per node and copied into the unique-table key. `NonTerminalMDD`
+  drops the `common::NonTerminal`/`Index` impls for value-returning inherent
+  accessors (`edge`, `iter`, `len`); casts confined to the node/table helpers.
+  ~28% peak-RSS reduction on a 2.1M-node multi-state diagram; result is
+  canonical (node counts/probabilities unchanged). No public API change
+  (`NodeId` stays `usize`).
+
 ## relib-mdd 0.5.0
 
 - **Breaking:** removed the public `get_cache` / `get_bcache` / `get_vcache`

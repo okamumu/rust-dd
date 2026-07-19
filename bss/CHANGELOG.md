@@ -1,3 +1,7 @@
+## relib-bss 0.5.1
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-bss 0.5.0
 
 - Inherit the `relib-bdd` 0.5.0 native `ite` and commutative operand ordering

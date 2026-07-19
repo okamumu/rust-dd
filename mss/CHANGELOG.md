@@ -1,3 +1,8 @@
+## relib-mss 0.5.1
+
+- Inherit the `relib-mdd` 0.5.1 u32 node storage (lower memory on large
+  multi-state diagrams). No API change.
+
 ## relib-mss 0.5.0
 
 - Inherit the `relib-mdd` 0.5.0 native `ite` (boolean and value-side) and

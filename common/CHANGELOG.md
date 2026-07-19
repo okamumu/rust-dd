@@ -1,3 +1,7 @@
+## relib-common 0.5.1
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-common 0.5.0
 
 - Add a shared direct-mapped, lossy computed table `ComputeCache` (CUDD-style),

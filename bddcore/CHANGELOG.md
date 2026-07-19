@@ -1,3 +1,7 @@
+## relib-bdd 0.5.1
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-bdd 0.5.0
 
 - Native `ite(f,g,h)`: replace the composite `or(and(f,g), and(not f,h))` (four
