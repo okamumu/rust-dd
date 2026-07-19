@@ -38,6 +38,9 @@ pub struct MddManager {
     utable: BddHashMap<(HeaderId, Box<[NodeId]>), NodeId>,
     // Direct-mapped, lossy computed table (CUDD-style); see common::ComputeCache.
     cache: ComputeCache,
+    // Dedicated computed table for the ternary `ite(f,g,h)`, keyed on the three
+    // node ids (k0=f, k1=g, k2=h) — no op-code word, so all three are node ids.
+    ite_cache: ComputeCache,
     // Slots in `nodes` reclaimed by gc(), available for reuse.
     freelist: Vec<NodeId>,
 }
@@ -98,6 +101,7 @@ impl MddManager {
         };
         let utable = BddHashMap::default();
         let cache = ComputeCache::new();
+        let ite_cache = ComputeCache::new();
         Self {
             headers,
             nodes,
@@ -106,6 +110,7 @@ impl MddManager {
             undet,
             utable,
             cache,
+            ite_cache,
             freelist: Vec::new(),
         }
     }
@@ -151,6 +156,9 @@ impl MddManager {
         // Keep memoized results that only reference surviving nodes; drop only
         // entries touching a reclaimed slot.
         self.cache.retain_live(&live);
+        // The ite cache is keyed on three node ids (f,g,h), so all three plus
+        // the result must be live.
+        self.ite_cache.retain_live3(&live);
 
         self.freelist.clear();
         for (id, &alive) in live.iter().enumerate() {
@@ -225,8 +233,24 @@ impl MddManager {
             .put(key.0.code(), key.1 as u32, key.2 as u32, val as u32);
     }
 
+    /// Look up a memoized `ite(f,g,h)` result.
+    #[inline]
+    pub(crate) fn ite_cache_get(&self, f: NodeId, g: NodeId, h: NodeId) -> Option<NodeId> {
+        self.ite_cache
+            .get(f as u32, g as u32, h as u32)
+            .map(|v| v as NodeId)
+    }
+
+    /// Memoize an `ite(f,g,h)` result.
+    #[inline]
+    pub(crate) fn ite_cache_put(&mut self, f: NodeId, g: NodeId, h: NodeId, val: NodeId) {
+        self.ite_cache
+            .put(f as u32, g as u32, h as u32, val as u32);
+    }
+
     #[inline]
     pub fn clear_cache(&mut self) {
         self.cache.clear();
+        self.ite_cache.clear();
     }
 }

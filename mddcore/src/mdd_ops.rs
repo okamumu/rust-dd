@@ -214,11 +214,75 @@ impl MddManager {
         self.not(tmp)
     }
 
+    /// Native k-ary `if-then-else`: `ite(f,g,h)` = "if f then g else h".
+    ///
+    /// A single Shannon recursion over the top variable of `f`/`g`/`h` with its
+    /// own computed table — versus the earlier `or(and(f,g), and(not f,h))`,
+    /// which ran four separate apply traversals per call. Mirrors the k-ary
+    /// `and`/`or` here (children iterated, lower operands replicated) and the
+    /// binary `bddcore` native `ite`. `Undet` propagation matches the composite:
+    /// a terminal `f` selects one branch (Undet in the other is ignored), and
+    /// `f == Undet` yields `undet`.
     pub fn ite(&mut self, f: NodeId, g: NodeId, h: NodeId) -> NodeId {
-        let x1 = self.and(f, g);
-        let barf = self.not(f);
-        let x2 = self.and(barf, h);
-        self.or(x1, x2)
+        match self.get_node(&f).unwrap() {
+            Node::One => return g,
+            Node::Zero => return h,
+            Node::Undet => return self.undet(),
+            Node::NonTerminal(_) => {}
+        }
+        if g == h {
+            return g;
+        }
+        if let Some(x) = self.ite_cache_get(f, g, h) {
+            return x;
+        }
+
+        // Top variable = highest real level among the operands (`f` is
+        // non-terminal, so `level(f)` seeds it; terminals report `None`).
+        let mut top = self.level(&f).unwrap();
+        for x in [g, h] {
+            if let Some(lx) = self.level(&x) {
+                if lx > top {
+                    top = lx;
+                }
+            }
+        }
+        let (headerid, k) = self.ite_top_header(f, g, h, top);
+        let fc = self.ite_cofactor(f, top, k);
+        let gc = self.ite_cofactor(g, top, k);
+        let hc = self.ite_cofactor(h, top, k);
+        let nodes: Vec<NodeId> = (0..k).map(|i| self.ite(fc[i], gc[i], hc[i])).collect();
+        let result = self.create_node(headerid, &nodes);
+        self.ite_cache_put(f, g, h, result);
+        result
+    }
+
+    /// Split `id` on variable level `top`: if `id` is a non-terminal at that
+    /// level, return its `k` children; otherwise it does not depend on the
+    /// variable, so it is replicated across all `k` slots (as k-ary and/or do
+    /// for the lower operand).
+    #[inline]
+    fn ite_cofactor(&self, id: NodeId, top: Level, k: usize) -> Vec<NodeId> {
+        if self.level(&id) == Some(top) {
+            if let Node::NonTerminal(n) = self.get_node(&id).unwrap() {
+                return n.iter().cloned().collect();
+            }
+        }
+        vec![id; k]
+    }
+
+    /// Header id and edge count of whichever of `f`/`g`/`h` sits at level `top`
+    /// (they share the same variable, hence the same header). At least one matches.
+    #[inline]
+    fn ite_top_header(&self, f: NodeId, g: NodeId, h: NodeId, top: Level) -> (HeaderId, usize) {
+        for x in [f, g, h] {
+            if self.level(&x) == Some(top) {
+                if let Node::NonTerminal(n) = self.get_node(&x).unwrap() {
+                    return (n.headerid(), n.iter().count());
+                }
+            }
+        }
+        unreachable!("ite: top level has no matching non-terminal operand")
     }
 
     pub fn replace(&mut self, f: NodeId, g: NodeId) -> NodeId {

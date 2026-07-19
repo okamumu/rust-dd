@@ -293,11 +293,7 @@ where
     pub fn ite(&mut self, f: Node, g: Node, h: Node) -> Node {
         match (f, g, h) {
             (Node::Bool(fnode), Node::Value(gnode), Node::Value(hnode)) => {
-                let barf = self.mdd_mut().not(fnode);
-                let vif = self.vif(fnode, gnode);
-                let barvif = self.vif(barf, hnode);
-                let result = self.mtmdd_mut().replace(vif, barvif);
-                Node::Value(result)
+                Node::Value(self.vite(fnode, gnode, hnode))
             }
             (Node::Bool(fnode), Node::Bool(gnode), Node::Bool(hnode)) => {
                 let result = self.mdd_mut().ite(fnode, gnode, hnode);
@@ -364,6 +360,94 @@ where
         };
         self.vcache_put(key, node);
         node
+    }
+
+    /// Native value-side `ite`: "if boolean `f` then value `g` else value `h`".
+    ///
+    /// `f` lives in the boolean (mdd) forest, `g`/`h`/result in the value
+    /// (mtmdd) forest; the two share the same headers/levels (see
+    /// `create_header`). A single ternary Shannon recursion — the three-operand
+    /// generalization of `vif` — replacing the old `replace(vif(f,g), vif(!f,h))`
+    /// (not + 2×vif + replace = four cross-forest passes). Semantics match: from
+    /// `vif`'s terminal arms, `f == One → g`, `f == Zero → h`, `f == Undet → undet`.
+    pub(crate) fn vite(&mut self, f: NodeId, g: NodeId, h: NodeId) -> NodeId {
+        match self.mdd().get_node(&f).unwrap() {
+            BNode::One => return g,
+            BNode::Zero => return h,
+            BNode::Undet => return self.mtmdd().undet(),
+            BNode::NonTerminal(_) => {}
+        }
+        if g == h {
+            return g;
+        }
+        if let Some(x) = self.vite_cache_get(f, g, h) {
+            return x;
+        }
+
+        // Top variable = highest real level among the operands (`f` is a
+        // non-terminal bool node, so `mdd.level(f)` seeds it).
+        let mut top = self.mdd().level(&f).unwrap();
+        if let Some(lg) = self.mtmdd().level(&g) {
+            if lg > top {
+                top = lg;
+            }
+        }
+        if let Some(lh) = self.mtmdd().level(&h) {
+            if lh > top {
+                top = lh;
+            }
+        }
+        let (headerid, k) = self.vite_top_header(f, g, h, top);
+        let fc = self.vite_cofactor_b(f, top, k);
+        let gc = self.vite_cofactor_v(g, top, k);
+        let hc = self.vite_cofactor_v(h, top, k);
+        let nodes: Vec<NodeId> = (0..k).map(|i| self.vite(fc[i], gc[i], hc[i])).collect();
+        let result = self.mtmdd_mut().create_node(headerid, &nodes);
+        self.vite_cache_put(f, g, h, result);
+        result
+    }
+
+    /// Cofactor a boolean (mdd) operand at level `top`: its `k` children if it
+    /// sits there, else replicate it across all `k` slots.
+    #[inline]
+    fn vite_cofactor_b(&self, id: NodeId, top: Level, k: usize) -> Vec<NodeId> {
+        if self.mdd().level(&id) == Some(top) {
+            if let BNode::NonTerminal(n) = self.mdd().get_node(&id).unwrap() {
+                return n.iter().cloned().collect();
+            }
+        }
+        vec![id; k]
+    }
+
+    /// Cofactor a value (mtmdd) operand at level `top`: its `k` children if it
+    /// sits there, else replicate it across all `k` slots.
+    #[inline]
+    fn vite_cofactor_v(&self, id: NodeId, top: Level, k: usize) -> Vec<NodeId> {
+        if self.mtmdd().level(&id) == Some(top) {
+            if let VNode::NonTerminal(n) = self.mtmdd().get_node(&id).unwrap() {
+                return n.iter().cloned().collect();
+            }
+        }
+        vec![id; k]
+    }
+
+    /// Header id and edge count at level `top`, from whichever of the bool `f`
+    /// or the value `g`/`h` sits there (they share the header). At least one does.
+    #[inline]
+    fn vite_top_header(&self, f: NodeId, g: NodeId, h: NodeId, top: Level) -> (HeaderId, usize) {
+        if self.mdd().level(&f) == Some(top) {
+            if let BNode::NonTerminal(n) = self.mdd().get_node(&f).unwrap() {
+                return (n.headerid(), n.iter().count());
+            }
+        }
+        for x in [g, h] {
+            if self.mtmdd().level(&x) == Some(top) {
+                if let VNode::NonTerminal(n) = self.mtmdd().get_node(&x).unwrap() {
+                    return (n.headerid(), n.iter().count());
+                }
+            }
+        }
+        unreachable!("vite: top level has no matching non-terminal operand")
     }
 }
 

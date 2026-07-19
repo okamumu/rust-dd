@@ -17,6 +17,11 @@ pub struct MtMdd2Manager<V> {
     // Direct-mapped, lossy computed tables (CUDD-style); see common::ComputeCache.
     bcache: ComputeCache,
     vcache: ComputeCache,
+    // Ternary computed table for the native value-side `ite(f,g,h)`: f is a
+    // boolean (mdd) node, g/h/result are value (mtmdd) nodes. Keyed (f,g,h);
+    // flushed (not retained) by gc like the other two caches, so the
+    // cross-forest key mix needs no per-arena liveness check.
+    vite_cache: ComputeCache,
 }
 
 impl<V> MtMdd2Manager<V>
@@ -29,6 +34,7 @@ where
             mtmdd: mtmdd::MtMddManager::new(),
             bcache: ComputeCache::new(),
             vcache: ComputeCache::new(),
+            vite_cache: ComputeCache::new(),
         }
     }
 
@@ -60,7 +66,7 @@ where
             vheader_size,
             vnode_size + bnode_size,
             vnode_size_val,
-            vcache_size + bcache_size + self.vcache.len() + self.bcache.len(),
+            vcache_size + bcache_size + self.vcache.len() + self.bcache.len() + self.vite_cache.len(),
         )
     }
 
@@ -137,10 +143,27 @@ where
             .put(key.0.code(), key.1 as u32, key.2 as u32, val as u32);
     }
 
+    /// Look up a memoized value-side `ite(f,g,h)` result (f is a bool node,
+    /// g/h/result are value nodes).
+    #[inline]
+    pub(crate) fn vite_cache_get(&self, f: NodeId, g: NodeId, h: NodeId) -> Option<NodeId> {
+        self.vite_cache
+            .get(f as u32, g as u32, h as u32)
+            .map(|v| v as NodeId)
+    }
+
+    /// Memoize a value-side `ite(f,g,h)` result.
+    #[inline]
+    pub(crate) fn vite_cache_put(&mut self, f: NodeId, g: NodeId, h: NodeId, val: NodeId) {
+        self.vite_cache
+            .put(f as u32, g as u32, h as u32, val as u32);
+    }
+
     #[inline]
     pub fn clear_cache(&mut self) {
         self.vcache.clear();
         self.bcache.clear();
+        self.vite_cache.clear();
         self.mtmdd.clear_cache();
         self.mdd.clear_cache();
     }
@@ -163,6 +186,7 @@ where
         }
         self.vcache.clear();
         self.bcache.clear();
+        self.vite_cache.clear();
         let v = self.mtmdd.gc(&vroots);
         let b = self.mdd.gc(&broots);
         (v, b)
