@@ -1,3 +1,9 @@
+## relib-mss 0.5.0
+
+- Inherit the `relib-mdd` 0.5.0 native `ite` (boolean and value-side) and
+  commutative operand ordering: faster `ifelse`/`switch`/`@match` and arithmetic
+  construction. No API change.
+
 ## relib-mss 0.4.1
 
 - Version bump for workspace lockstep; no functional changes.

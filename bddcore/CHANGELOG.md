@@ -1,3 +1,15 @@
+## relib-bdd 0.5.0
+
+- Native `ite(f,g,h)`: replace the composite `or(and(f,g), and(not f,h))` (four
+  apply traversals per call) with a single Shannon recursion over the top
+  variable, backed by a dedicated computed table. `ite`-heavy workloads (e.g.
+  k-of-n) build ~5–12× faster in `bdd-bench`; result is unchanged (canonical).
+- Commutative operand ordering: canonicalize the operand pair in `and`/`or`/`xor`
+  before the computed-table key, so `op(a,b)` and `op(b,a)` share an entry
+  (~2.5× on symmetric functions like n-queens).
+- Use the shared `relib-common::ComputeCache` (the direct-mapped table moved out
+  of this crate). No public API change (operation signatures are unchanged).
+
 ## relib-bdd 0.4.1
 
 - Replace the growing `HashMap` operation cache with a fixed, direct-mapped,

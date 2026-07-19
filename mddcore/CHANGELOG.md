@@ -1,3 +1,18 @@
+## relib-mdd 0.5.0
+
+- **Breaking:** removed the public `get_cache` / `get_bcache` / `get_vcache`
+  accessors on the MDD managers (the operation caches are now the shared
+  `relib-common::ComputeCache`, an implementation detail).
+- Adopt the shared direct-mapped `ComputeCache` for all four operation caches
+  (`MddManager`, `MtMddManager`, and `MtMdd2Manager`'s bool/value caches).
+- Commutative operand ordering before the computed-table key: boolean `and`/`or`/
+  `xor` and MTMDD `add`/`mul`/`min`/`max` (`sub`/`div`/`rem` left as-is).
+  ~2.2–2.6× on the MTMDD sum workload in `bdd-bench`.
+- Native `ite`: the boolean MDD `ite` (was `or(and,and(not))`) becomes a k-ary
+  Shannon recursion with its own cache; the value-side `MtMdd2::ite` (was
+  `replace(vif(f,g), vif(!f,h))`) becomes a ternary cross-forest recursion. Up to
+  ~1.9× (boolean) / ~1.3–1.6× (value) on `ite`-heavy workloads; result unchanged.
+
 ## relib-mdd 0.4.1
 
 - Version bump for workspace lockstep; no functional changes.

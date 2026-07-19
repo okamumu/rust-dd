@@ -1,3 +1,8 @@
+## relib-bss 0.5.0
+
+- Inherit the `relib-bdd` 0.5.0 native `ite` and commutative operand ordering
+  (faster `ite`/`kofn`/`@match` construction). No API change.
+
 ## relib-bss 0.4.1
 
 - Fix exponential-time `BddMgr::kofn`: the naive Shannon recursion never memoized

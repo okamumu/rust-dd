@@ -1,3 +1,11 @@
+## relib-common 0.5.0
+
+- Add a shared direct-mapped, lossy computed table `ComputeCache` (CUDD-style),
+  moved here from `relib-bdd` so the BDD and MDD engines share one implementation.
+  Public API: `get`/`put`, `retain_live` (op-keyed caches: `k0` is an op code),
+  `retain_live3` (ternary caches whose `k0` is also a node id, e.g. an `ite`
+  cache), `clear`, `len`. Additive; no breaking change.
+
 ## relib-common 0.4.1
 
 - Version bump for workspace lockstep; no functional changes.
