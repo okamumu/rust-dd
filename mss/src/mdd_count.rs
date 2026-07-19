@@ -44,7 +44,7 @@ where
             let mut nn = T::from(1);
             let mut nv = T::from(0);
             let mut ne = T::from(1);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for x in fnodeid.into_iter() {
                 let (ntmp, vtmp, etmp) = vmddnode_count(dd, x, cache);
                 nn = nn + ntmp;
@@ -78,7 +78,7 @@ where
             let mut nn = T::from(1);
             let mut nv = T::from(0);
             let mut ne = T::from(1);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for x in fnodeid.into_iter() {
                 let (ntmp, vtmp, etmp) = bmddnode_count(dd, x, cache);
                 nn = nn + ntmp;
@@ -158,7 +158,7 @@ where
         }
         mtmdd::Node::NonTerminal(fnode) => {
             let mut result = T::from(0);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for x in fnodeid.into_iter() {
                 let tmp = vmdd_count(mdd, x, ss, cache, level.and_then(|x| x.checked_sub(1)), level2headers);
                 result = result + tmp;
@@ -202,7 +202,7 @@ where
         }
         mdd::Node::NonTerminal(fnode) => {
             let mut result = T::from(0);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for x in fnodeid.into_iter() {
                 let tmp = bmdd_count(mdd, x, ss, cache, level.and_then(|x| x.checked_sub(1)), level2headers);
                 result = result + tmp;
@@ -275,7 +275,7 @@ where
         }
         mtmdd::Node::NonTerminal(fnode) => {
             let mut result = T::from(0);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for x in fnodeid.into_iter() {
                 let tmp = vzmdd_count(mdd, x, ss, cache);
                 result = result + tmp;
@@ -319,7 +319,7 @@ where
         }
         mdd::Node::NonTerminal(fnode) => {
             let mut result = T::from(0);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for x in fnodeid.into_iter() {
                 let tmp = bzmdd_count(mdd, x, ss, cache);
                 result = result + tmp;

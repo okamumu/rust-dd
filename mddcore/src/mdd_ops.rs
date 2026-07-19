@@ -37,7 +37,7 @@ impl MddManager {
             Node::One => self.zero(),
             Node::NonTerminal(fnode) => {
                 let headerid = fnode.headerid();
-                let nodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let nodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = nodeid.iter().map(|&f| self.not(f)).collect();
                 self.create_node(headerid, &nodes)
             }
@@ -62,7 +62,7 @@ impl MddManager {
                 if self.level(&f) > self.level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.and(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
@@ -70,14 +70,14 @@ impl MddManager {
                 if self.level(&f) < self.level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.and(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid
                     .iter()
                     .zip(gnodeid.iter())
@@ -110,7 +110,7 @@ impl MddManager {
                 if self.level(&f) > self.level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.or(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
@@ -118,14 +118,14 @@ impl MddManager {
                 if self.level(&f) < self.level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.or(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid
                     .iter()
                     .zip(gnodeid.iter())
@@ -160,7 +160,7 @@ impl MddManager {
                 if self.level(&f) > self.level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.xor(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
@@ -168,14 +168,14 @@ impl MddManager {
                 if self.level(&f) < self.level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.xor(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid
                     .iter()
                     .zip(gnodeid.iter())
@@ -265,7 +265,7 @@ impl MddManager {
     fn ite_cofactor(&self, id: NodeId, top: Level, k: usize) -> Vec<NodeId> {
         if self.level(&id) == Some(top) {
             if let Node::NonTerminal(n) = self.get_node(&id).unwrap() {
-                return n.iter().cloned().collect();
+                return n.iter().collect();
             }
         }
         vec![id; k]
@@ -297,13 +297,13 @@ impl MddManager {
             (Node::One, _) => self.one(),
             (Node::NonTerminal(fnode), Node::Zero) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.replace(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
             (Node::NonTerminal(fnode), Node::One) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.replace(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
@@ -311,7 +311,7 @@ impl MddManager {
                 if self.level(&f) > self.level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid.iter().map(|&f| self.replace(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
@@ -319,14 +319,14 @@ impl MddManager {
                 if self.level(&f) < self.level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = gnodeid.iter().map(|&g| self.replace(f, g)).collect();
                 self.create_node(headerid, &nodes)
             }
             (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
-                let fnodeid: Vec<NodeId> = fnode.iter().cloned().collect();
-                let gnodeid: Vec<NodeId> = gnode.iter().cloned().collect();
+                let fnodeid: Vec<NodeId> = fnode.iter().collect();
+                let gnodeid: Vec<NodeId> = gnode.iter().collect();
                 let nodes: Vec<NodeId> = fnodeid
                     .iter()
                     .zip(gnodeid.iter())

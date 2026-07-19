@@ -37,7 +37,7 @@ where
         mtmdd::Node::Terminal(_fnode) => node,
         mtmdd::Node::NonTerminal(fnode) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             let mut result = Vec::new();
             for (i, x) in fnodeid.iter().enumerate() {
                 if i == 0 {
@@ -82,7 +82,7 @@ where
         }
         (mtmdd::Node::NonTerminal(fnode), mtmdd::Node::Terminal(_)) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             let tmp: Vec<_> = fnodeid
                 .into_iter()
                 .map(|x| vwithout(mdd, x, g, cache))
@@ -91,7 +91,7 @@ where
         }
         (mtmdd::Node::Terminal(_), mtmdd::Node::NonTerminal(gnode)) => {
             let headerid = gnode.headerid();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let tmp: Vec<_> = gnodeid
                 .into_iter()
                 .map(|x| vwithout(mdd, f, x, cache))
@@ -101,13 +101,13 @@ where
         (mtmdd::Node::NonTerminal(fnode), mtmdd::Node::NonTerminal(_gnode))
             if mdd.level(&f) > mdd.level(&g) =>
         {
-            vwithout(mdd, fnode[0], g, cache)
+            vwithout(mdd, fnode.edge(0), g, cache)
         }
         (mtmdd::Node::NonTerminal(_fnode), mtmdd::Node::NonTerminal(gnode))
             if mdd.level(&f) < mdd.level(&g) =>
         {
             let headerid = gnode.headerid();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let tmp: Vec<_> = gnodeid
                 .into_iter()
                 .map(|x| vwithout(mdd, f, x, cache))
@@ -116,8 +116,8 @@ where
         }
         (mtmdd::Node::NonTerminal(fnode), mtmdd::Node::NonTerminal(gnode)) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let tmp: Vec<_> = fnodeid
                 .into_iter()
                 .zip(gnodeid.into_iter())
@@ -145,7 +145,7 @@ fn bminsol(
         mdd::Node::One => node,
         mdd::Node::NonTerminal(fnode) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             let mut result = Vec::new();
             for (i, x) in fnodeid.iter().enumerate() {
                 if i == 0 {
@@ -184,7 +184,7 @@ fn bwithout(
         (mdd::Node::One, _) => mdd.undet(),
         (mdd::Node::NonTerminal(fnode), mdd::Node::One) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             let tmp: Vec<_> = fnodeid
                 .into_iter()
                 .map(|x| bwithout(mdd, x, g, cache))
@@ -194,13 +194,13 @@ fn bwithout(
         (mdd::Node::NonTerminal(fnode), mdd::Node::NonTerminal(_gnode))
             if mdd.level(&f) > mdd.level(&g) =>
         {
-            bwithout(mdd, fnode[0], g, cache)
+            bwithout(mdd, fnode.edge(0), g, cache)
         }
         (mdd::Node::NonTerminal(_fnode), mdd::Node::NonTerminal(gnode))
             if mdd.level(&f) < mdd.level(&g) =>
         {
             let headerid = gnode.headerid();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let tmp: Vec<_> = gnodeid
                 .into_iter()
                 .map(|x| bwithout(mdd, f, x, cache))
@@ -209,8 +209,8 @@ fn bwithout(
         }
         (mdd::Node::NonTerminal(fnode), mdd::Node::NonTerminal(gnode)) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
-            let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
+            let gnodeid: Vec<_> = gnode.iter().collect();
             let tmp: Vec<_> = fnodeid
                 .into_iter()
                 .zip(gnodeid.into_iter())

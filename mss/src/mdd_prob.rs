@@ -53,7 +53,7 @@ where
             let label = mdd.label(&node).unwrap();
             let fp = pv.get(label).unwrap();
             let mut result = T::from(0.0);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for (i, x) in fnodeid.into_iter().enumerate() {
                 let tmp = vprob(mdd, x, pv, ss, cache);
                 result = result + fp[i] * tmp;
@@ -100,7 +100,7 @@ where
             let label = mdd.label(&node).unwrap();
             let fp = pv.get(label).unwrap();
             let mut result = T::from(0.0);
-            let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+            let fnodeid: Vec<_> = fnode.iter().collect();
             for (i, x) in fnodeid.into_iter().enumerate() {
                 let tmp = bprob(mdd, x, pv, ss, cache);
                 result = result + fp[i] * tmp;

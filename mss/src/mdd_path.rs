@@ -106,7 +106,7 @@ where
                         mtmdd::Node::NonTerminal(fnode) => {
                             let label = &self.labels[level.unwrap()];
                             let level = level.and_then(|x| x.checked_sub(1));
-                            let fnodeid = fnode.iter().cloned().collect::<Vec<_>>();
+                            let fnodeid = fnode.iter().collect::<Vec<_>>();
                             for (i, x) in fnodeid.into_iter().enumerate().rev() {
                                 self.next_stack.push(MddStackValue::Pop(label.to_string()));
                                 self.next_stack.push(MddStackValue::Node(level, x));
@@ -154,7 +154,7 @@ where
                         mdd::Node::NonTerminal(fnode) => {
                             let label = &self.labels[level.unwrap()];
                             let level = level.and_then(|x| x.checked_sub(1));
-                            let fnodeid = fnode.iter().cloned().collect::<Vec<_>>();
+                            let fnodeid = fnode.iter().collect::<Vec<_>>();
                             for (i, x) in fnodeid.into_iter().enumerate().rev() {
                                 self.next_stack.push(MddStackValue::Pop(label.to_string()));
                                 self.next_stack.push(MddStackValue::Node(level, x));
@@ -257,7 +257,7 @@ where
                     }
                     mtmdd::Node::NonTerminal(fnode) => {
                         let label = dd.borrow().mtmdd().label(&node).unwrap().to_string();
-                        let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                        let fnodeid: Vec<_> = fnode.iter().collect();
                         for (i, x) in fnodeid.into_iter().enumerate().rev() {
                             self.next_stack.push(ZMddStackValue::Pop(label.to_string()));
                             self.next_stack.push(ZMddStackValue::Node(x));
@@ -296,7 +296,7 @@ where
                     }
                     mdd::Node::NonTerminal(fnode) => {
                         let label = dd.borrow().mdd().label(&node).unwrap().to_string();
-                        let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                        let fnodeid: Vec<_> = fnode.iter().collect();
                         for (i, x) in fnodeid.into_iter().enumerate().rev() {
                             self.next_stack.push(ZMddStackValue::Pop(label.to_string()));
                             self.next_stack.push(ZMddStackValue::Node(x));

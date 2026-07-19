@@ -136,13 +136,13 @@ where
             (VNode::Terminal(_), VNode::Terminal(_)) => self.mdd().zero(),
             (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.veq(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
             (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
                 let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.veq(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
@@ -150,7 +150,7 @@ where
                 if self.mtmdd().level(&f) > self.mtmdd().level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
                 let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.veq(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
@@ -158,14 +158,14 @@ where
                 if self.mtmdd().level(&f) < self.mtmdd().level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.veq(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
             (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = fnodeid
                     .into_iter()
                     .zip(gnodeid.into_iter())
@@ -213,13 +213,13 @@ where
             (VNode::Terminal(_fnode), VNode::Terminal(_gnode)) => self.mdd().zero(),
             (VNode::Terminal(_fnode), VNode::NonTerminal(gnode)) => {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.vlt(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
             (VNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
                 let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vlt(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
@@ -227,7 +227,7 @@ where
                 if self.mtmdd().level(&f) > self.mtmdd().level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
                 let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vlt(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
@@ -235,14 +235,14 @@ where
                 if self.mtmdd().level(&f) < self.mtmdd().level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.vlt(f, g)).collect();
                 self.mdd_mut().create_node(headerid, &nodes)
             }
             (VNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = fnodeid
                     .into_iter()
                     .zip(gnodeid.into_iter())
@@ -326,7 +326,7 @@ where
             (BNode::One, _) => g,
             (BNode::NonTerminal(fnode), VNode::Terminal(_gnode)) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
                 let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vif(f, g)).collect();
                 self.mtmdd_mut().create_node(headerid, &nodes)
             }
@@ -334,7 +334,7 @@ where
                 if self.mdd().level(&f) > self.mtmdd().level(&g) =>
             {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().cloned().collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
                 let nodes: Vec<_> = fnodeid.into_iter().map(|f| self.vif(f, g)).collect();
                 self.mtmdd_mut().create_node(headerid, &nodes)
             }
@@ -342,14 +342,14 @@ where
                 if self.mdd().level(&f) < self.mtmdd().level(&g) =>
             {
                 let headerid = gnode.headerid();
-                let gnodeid: Vec<_> = gnode.iter().cloned().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = gnodeid.into_iter().map(|g| self.vif(f, g)).collect();
                 self.mtmdd_mut().create_node(headerid, &nodes)
             }
             (BNode::NonTerminal(fnode), VNode::NonTerminal(gnode)) => {
                 let headerid = fnode.headerid();
-                let fnodeid: Vec<_> = fnode.iter().map(|&f| f).collect();
-                let gnodeid: Vec<_> = gnode.iter().map(|&g| g).collect();
+                let fnodeid: Vec<_> = fnode.iter().collect();
+                let gnodeid: Vec<_> = gnode.iter().collect();
                 let nodes: Vec<_> = fnodeid
                     .into_iter()
                     .zip(gnodeid.into_iter())
@@ -413,7 +413,7 @@ where
     fn vite_cofactor_b(&self, id: NodeId, top: Level, k: usize) -> Vec<NodeId> {
         if self.mdd().level(&id) == Some(top) {
             if let BNode::NonTerminal(n) = self.mdd().get_node(&id).unwrap() {
-                return n.iter().cloned().collect();
+                return n.iter().collect();
             }
         }
         vec![id; k]
@@ -425,7 +425,7 @@ where
     fn vite_cofactor_v(&self, id: NodeId, top: Level, k: usize) -> Vec<NodeId> {
         if self.mtmdd().level(&id) == Some(top) {
             if let VNode::NonTerminal(n) = self.mtmdd().get_node(&id).unwrap() {
-                return n.iter().cloned().collect();
+                return n.iter().collect();
             }
         }
         vec![id; k]

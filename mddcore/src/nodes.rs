@@ -4,44 +4,64 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use common::prelude::*;
 
+/// Non-terminal MDD node.
+///
+/// Ids/header/children are stored as `u32` (node and header counts fit in 32
+/// bits) to keep the node — and therefore the `nodes` arena and the unique-table
+/// keys, which copy the child slice — compact; this halves the id bytes stored
+/// and hashed per `create_node` on large diagrams. The public API stays in terms
+/// of `NodeId`/`HeaderId` (usize); casts are confined to the accessors here. Like
+/// `bddcore::NonTerminalBDD`, this type intentionally does NOT implement the
+/// shared `common::NonTerminal` trait (whose `Index`/`iter` return references to
+/// `NodeId`, which u32 storage cannot provide); it exposes value-returning
+/// inherent accessors instead.
 #[derive(Debug)]
 pub struct NonTerminalMDD {
-    id: NodeId,
-    header: HeaderId,
-    nodes: Box<[NodeId]>,
+    id: u32,
+    header: u32,
+    nodes: Box<[u32]>,
 }
 
 impl NonTerminalMDD {
     pub fn new(id: NodeId, header: HeaderId, nodes: &[NodeId]) -> Self {
         Self {
-            id,
-            header,
-            nodes: nodes.to_vec().into_boxed_slice(),
+            id: id as u32,
+            header: header as u32,
+            nodes: nodes.iter().map(|&x| x as u32).collect(),
         }
     }
-}
 
-impl NonTerminal for NonTerminalMDD {
     #[inline]
-    fn id(&self) -> NodeId {
-        self.id
+    pub fn id(&self) -> NodeId {
+        self.id as NodeId
     }
 
     #[inline]
-    fn headerid(&self) -> HeaderId {
-        self.header
+    pub fn headerid(&self) -> HeaderId {
+        self.header as HeaderId
     }
 
-    fn iter(&self) -> Iter<'_, NodeId> {
-        self.nodes.iter()
+    /// Returns the `i`-th child as a `NodeId`.
+    #[inline]
+    pub fn edge(&self, i: usize) -> NodeId {
+        self.nodes[i] as NodeId
     }
-}
 
-impl Index<usize> for NonTerminalMDD {
-    type Output = NodeId;
+    /// Number of children (edge count).
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.nodes[index]
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    /// Iterates the children as `NodeId` values.
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.nodes.iter().map(|&x| x as NodeId)
     }
 }
 

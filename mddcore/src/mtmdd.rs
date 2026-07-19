@@ -63,11 +63,13 @@ pub struct MtMddManager<V> {
     headers: Vec<NodeHeader>,
     nodes: Vec<Node<V>>,
     undet: NodeId,
-    vtable: BddHashMap<V, NodeId>,
-    utable: BddHashMap<(HeaderId, Box<[NodeId]>), NodeId>,
+    vtable: BddHashMap<V, u32>,
+    // u32-narrowed like `MddManager::utable` (halves key bytes copied/hashed per
+    // create_node on large diagrams); NodeId stays usize at the boundary.
+    utable: BddHashMap<(u32, Box<[u32]>), u32>,
     cache: ComputeCache,
     // Slots in `nodes` reclaimed by gc(), available for reuse.
-    freelist: Vec<NodeId>,
+    freelist: Vec<u32>,
 }
 
 impl<V> DDForest for MtMddManager<V>
@@ -132,8 +134,9 @@ where
 
     fn alloc(&mut self, node: impl FnOnce(NodeId) -> Node<V>) -> NodeId {
         let id = if let Some(slot) = self.freelist.pop() {
-            self.nodes[slot] = node(slot);
-            slot
+            let id = slot as usize;
+            self.nodes[id] = node(id);
+            id
         } else {
             let id = self.nodes.len();
             self.nodes.push(node(id));
@@ -168,12 +171,12 @@ where
             }
             live[id] = true;
             if let Node::NonTerminal(fnode) = &self.nodes[id] {
-                stack.extend(fnode.iter().copied());
+                stack.extend(fnode.iter());
             }
         }
 
-        self.utable.retain(|_, &mut v| live[v]);
-        self.vtable.retain(|_, &mut v| live[v]);
+        self.utable.retain(|_, &mut v| live[v as usize]);
+        self.vtable.retain(|_, &mut v| live[v as usize]);
         // Keep memoized results that only reference surviving nodes (operands
         // and results may be value terminals, also covered by `live`); drop only
         // entries touching a reclaimed slot.
@@ -182,7 +185,7 @@ where
         self.freelist.clear();
         for (id, &alive) in live.iter().enumerate() {
             if !alive {
-                self.freelist.push(id);
+                self.freelist.push(id as u32);
             }
         }
         self.freelist.len()
@@ -204,10 +207,10 @@ where
 
     pub fn value(&mut self, value: V) -> NodeId {
         if let Some(&x) = self.vtable.get(&value) {
-            return x;
+            return x as NodeId;
         }
         let node = self.new_terminal(value);
-        self.vtable.insert(value, node);
+        self.vtable.insert(value, node as u32);
         node
     }
 
@@ -217,12 +220,12 @@ where
                 return first;
             }
         }
-        let key = (h, nodes.to_vec().into_boxed_slice());
+        let key = (h as u32, nodes.iter().map(|&x| x as u32).collect());
         if let Some(&x) = self.utable.get(&key) {
-            return x;
+            return x as NodeId;
         }
         let node = self.new_nonterminal(h, nodes);
-        self.utable.insert(key, node);
+        self.utable.insert(key, node as u32);
         node
     }
 

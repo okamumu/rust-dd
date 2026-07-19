@@ -37,8 +37,8 @@ where
                 );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, xid) in fnode.iter().enumerate() {
-                    if let Node::Terminal(_) | Node::NonTerminal(_) = self.get_node(xid).unwrap() {
-                        self.dot_impl(io, xid, visited);
+                    if let Node::Terminal(_) | Node::NonTerminal(_) = self.get_node(&xid).unwrap() {
+                        self.dot_impl(io, &xid, visited);
                         let s = format!(
                             "\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n",
                             fnode.id(),

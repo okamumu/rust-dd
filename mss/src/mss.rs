@@ -626,7 +626,7 @@ where
                                     MddNode::from_weak(
                                         self.parent.clone(),
                                         self.gc.clone(),
-                                        Node::Value(*id),
+                                        Node::Value(id),
                                     )
                                 })
                                 .collect(),
@@ -649,7 +649,7 @@ where
                                     MddNode::from_weak(
                                         self.parent.clone(),
                                         self.gc.clone(),
-                                        Node::Bool(*id),
+                                        Node::Bool(id),
                                     )
                                 })
                                 .collect(),

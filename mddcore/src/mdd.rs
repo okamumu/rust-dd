@@ -35,14 +35,18 @@ pub struct MddManager {
     zero: NodeId,
     one: NodeId,
     undet: NodeId,
-    utable: BddHashMap<(HeaderId, Box<[NodeId]>), NodeId>,
+    // Keys/values stored as u32 (node/header counts fit in 32 bits): halves the
+    // bytes of the (header, children) key copied and hashed per create_node,
+    // which dominates apply on large diagrams. NodeId/HeaderId stay usize at the
+    // public boundary; casts are confined to the helpers below.
+    utable: BddHashMap<(u32, Box<[u32]>), u32>,
     // Direct-mapped, lossy computed table (CUDD-style); see common::ComputeCache.
     cache: ComputeCache,
     // Dedicated computed table for the ternary `ite(f,g,h)`, keyed on the three
     // node ids (k0=f, k1=g, k2=h) — no op-code word, so all three are node ids.
     ite_cache: ComputeCache,
     // Slots in `nodes` reclaimed by gc(), available for reuse.
-    freelist: Vec<NodeId>,
+    freelist: Vec<u32>,
 }
 
 impl DDForest for MddManager {
@@ -118,8 +122,9 @@ impl MddManager {
     fn new_nonterminal(&mut self, header: HeaderId, nodes: &[NodeId]) -> NodeId {
         let id = if let Some(slot) = self.freelist.pop() {
             // Recycle a slot reclaimed by a previous gc().
-            self.nodes[slot] = Node::NonTerminal(NonTerminalMDD::new(slot, header, nodes));
-            slot
+            let id = slot as usize;
+            self.nodes[id] = Node::NonTerminal(NonTerminalMDD::new(id, header, nodes));
+            id
         } else {
             let id = self.nodes.len();
             self.nodes.push(Node::NonTerminal(NonTerminalMDD::new(id, header, nodes)));
@@ -148,11 +153,11 @@ impl MddManager {
             }
             live[id] = true;
             if let Node::NonTerminal(fnode) = &self.nodes[id] {
-                stack.extend(fnode.iter().copied());
+                stack.extend(fnode.iter());
             }
         }
 
-        self.utable.retain(|_, &mut v| live[v]);
+        self.utable.retain(|_, &mut v| live[v as usize]);
         // Keep memoized results that only reference surviving nodes; drop only
         // entries touching a reclaimed slot.
         self.cache.retain_live(&live);
@@ -163,7 +168,7 @@ impl MddManager {
         self.freelist.clear();
         for (id, &alive) in live.iter().enumerate() {
             if !alive {
-                self.freelist.push(id);
+                self.freelist.push(id as u32);
             }
         }
         self.freelist.len()
@@ -189,12 +194,12 @@ impl MddManager {
                 return first;
             }
         }
-        let key = (header, nodes.to_vec().into_boxed_slice());
+        let key = (header as u32, nodes.iter().map(|&x| x as u32).collect());
         if let Some(&nodeid) = self.utable.get(&key) {
-            return nodeid;
+            return nodeid as NodeId;
         }
         let node = self.new_nonterminal(header, nodes);
-        self.utable.insert(key, node);
+        self.utable.insert(key, node as u32);
         node
     }
 
