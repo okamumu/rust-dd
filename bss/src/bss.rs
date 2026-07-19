@@ -672,6 +672,42 @@ mod tests {
     }
 
     #[test]
+    fn test_kofn_minterms() {
+        // "at least k of n" must have exactly sum_{j>=k} C(n,j) satisfying
+        // assignments. n=20 is far beyond what the old O(2^n) kofn could build
+        // in reasonable time, so this guards both correctness and the memoized
+        // O(n*k) complexity.
+        fn binom(n: u64, k: u64) -> u64 {
+            if k > n {
+                return 0;
+            }
+            let k = k.min(n - k);
+            let mut r = 1u64;
+            for i in 0..k {
+                r = r * (n - i) / (i + 1);
+            }
+            r
+        }
+        fn threshold_count(n: u64, k: u64) -> u64 {
+            (k..=n).map(|j| binom(n, j)).sum()
+        }
+
+        for &n in &[8usize, 16, 20] {
+            let mut bss = BddMgr::new();
+            let vars: Vec<_> = (0..n).map(|i| bss.defvar(&format!("x{i}"))).collect();
+            // at-least-0 is the tautology: the reduced BDD is the `one` terminal
+            // (0 non-terminal nodes). Exercises the k==0 base that the old code
+            // panicked on (usize underflow).
+            assert_eq!(bss.kofn(0, &vars).size().0, 0);
+            for &k in &[1usize, 2, n / 2, n] {
+                let got = bss.kofn(k, &vars).bdd_count(&[true]);
+                let want = threshold_count(n as u64, k as u64);
+                assert_eq!(got, want, "kofn(k={k}, n={n})");
+            }
+        }
+    }
+
+    #[test]
     fn test_and1() {
         let mut bss = BddMgr::new();
         let x = bss.defvar("x");
