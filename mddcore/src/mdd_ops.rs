@@ -46,7 +46,12 @@ impl MddManager {
         node
     }
 
-    pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn and(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        // Commutative: canonicalize operand order so and(a,b)/and(b,a) share a
+        // computed-table entry (CUDD-style), improving hit rate.
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MddOperation::And, f, g);
         if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
@@ -91,7 +96,10 @@ impl MddManager {
         node
     }
 
-    pub fn or(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn or(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MddOperation::Or, f, g);
         if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
@@ -136,7 +144,10 @@ impl MddManager {
         node
     }
 
-    pub fn xor(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn xor(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MddOperation::XOr, f, g);
         if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;

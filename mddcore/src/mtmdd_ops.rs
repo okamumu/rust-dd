@@ -37,7 +37,12 @@ impl<V> MtMddManager<V>
 where
     V: MddValue,
 {
-    pub fn add(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn add(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        // Commutative: canonicalize operand order so add(a,b)/add(b,a) share a
+        // computed-table entry (CUDD-style), improving hit rate.
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MtMddOperation::Add, f, g);
         if let Some(x) = self.cache_get(&key) {
             return x;
@@ -147,7 +152,10 @@ where
         node
     }
 
-    pub fn mul(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn mul(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MtMddOperation::Mul, f, g);
         if let Some(x) = self.cache_get(&key) {
             return x;
@@ -318,7 +326,10 @@ where
         node
     }
 
-    pub fn min(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn min(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MtMddOperation::Min, f, g);
         if let Some(x) = self.cache_get(&key) {
             return x;
@@ -373,7 +384,10 @@ where
         node
     }
 
-    pub fn max(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn max(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
+        }
         let key = (MtMddOperation::Max, f, g);
         if let Some(x) = self.cache_get(&key) {
             return x;
