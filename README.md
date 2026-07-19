@@ -35,6 +35,14 @@ cargo build
 cargo test
 ```
 
+## Documentation
+
+- **[`docs/developer-guide.md`](docs/developer-guide.md)** — contributor reference: crate
+  layout, the arena/forest model, apply algorithms, native `ite`, the direct-mapped compute
+  cache, garbage collection, and the public API map.
+- Per-crate API reference: `cargo doc --no-deps --workspace --open` (or docs.rs).
+- Per-crate `README.md` / `CHANGELOG.md`.
+
 ## License
 
 MIT
