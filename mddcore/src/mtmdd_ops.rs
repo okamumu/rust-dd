@@ -16,13 +16,30 @@ pub enum MtMddOperation {
     Replace,
 }
 
+impl MtMddOperation {
+    /// Compact code for use as a computed-table key word.
+    #[inline]
+    pub(crate) fn code(&self) -> u32 {
+        match self {
+            MtMddOperation::Add => 0,
+            MtMddOperation::Sub => 1,
+            MtMddOperation::Mul => 2,
+            MtMddOperation::Div => 3,
+            MtMddOperation::Rem => 4,
+            MtMddOperation::Min => 5,
+            MtMddOperation::Max => 6,
+            MtMddOperation::Replace => 7,
+        }
+    }
+}
+
 impl<V> MtMddManager<V>
 where
     V: MddValue,
 {
     pub fn add(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Add, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -71,13 +88,13 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn sub(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Sub, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -126,13 +143,13 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn mul(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Mul, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -181,13 +198,13 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn div(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Div, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -239,13 +256,13 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn rem(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Rem, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -297,13 +314,13 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn min(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Min, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -352,13 +369,13 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn max(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Max, f, g);
-        if let Some(&x) = self.get_cache().get(&key) {
+        if let Some(x) = self.cache_get(&key) {
             return x;
         }
         let node = match (&self.get_node(&f).unwrap(), &self.get_node(&g).unwrap()) {
@@ -407,14 +424,14 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn replace(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMddOperation::Replace, f, g);
-        if let Some(x) = self.get_cache().get(&key) {
-            return *x;
+        if let Some(x) = self.cache_get(&key) {
+            return x;
         }
         let node = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
             (Node::Undet, _) => g,
@@ -454,7 +471,7 @@ where
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 }

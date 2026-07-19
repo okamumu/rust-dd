@@ -39,7 +39,6 @@
 use common::prelude::*;
 use crate::nodes::*;
 use crate::bdd_ops::Operation;
-use crate::compute_cache::ComputeCache;
 
 pub struct BddManager {
     headers: Vec<NodeHeader>,
@@ -56,6 +55,9 @@ pub struct BddManager {
     // apply instead of a growing HashMap's probe + periodic rehash. Safe because
     // the cache is a memoization hint (a miss only recomputes). See compute_cache.rs.
     cache: ComputeCache,
+    // Dedicated computed table for the ternary `ite(f,g,h)`, keyed on the three
+    // node ids (k0=f, k1=g, k2=h) — no op-code word, so all three are node ids.
+    ite_cache: ComputeCache,
     // Slots in `nodes` reclaimed by gc(), available for reuse. The `nodes` Vec
     // is never shrunk (ids stay stable); freed slots are recycled instead.
     freelist: Vec<u32>,
@@ -117,6 +119,7 @@ impl BddManager {
         };
         let utable = BddHashMap::default();
         let cache = ComputeCache::new();
+        let ite_cache = ComputeCache::new();
         Self {
             headers,
             nodes,
@@ -125,6 +128,7 @@ impl BddManager {
             undet,
             utable,
             cache,
+            ite_cache,
             freelist: Vec::new(),
         }
     }
@@ -183,6 +187,9 @@ impl BddManager {
         // reclaimed slot. (`not` keys are `(Not, f, 0)`; slot 0 is the zero
         // terminal, always live.)
         self.cache.retain_live(&live);
+        // The ite cache is keyed on three node ids (f,g,h), so all three plus
+        // the result must be live.
+        self.ite_cache.retain_live3(&live);
 
         // Rebuild the free list from scratch from all dead slots (idempotent
         // across repeated gc calls; previously-freed-and-unused slots are simply
@@ -268,9 +275,25 @@ impl BddManager {
         self.cache.put(key.0.code(), key.1, key.2, val as u32);
     }
 
+    /// Look up a memoized `ite(f,g,h)` result.
+    #[inline]
+    pub(crate) fn ite_cache_get(&self, f: NodeId, g: NodeId, h: NodeId) -> Option<NodeId> {
+        self.ite_cache
+            .get(f as u32, g as u32, h as u32)
+            .map(|v| v as NodeId)
+    }
+
+    /// Memoize an `ite(f,g,h)` result.
+    #[inline]
+    pub(crate) fn ite_cache_put(&mut self, f: NodeId, g: NodeId, h: NodeId, val: NodeId) {
+        self.ite_cache
+            .put(f as u32, g as u32, h as u32, val as u32);
+    }
+
     #[inline]
     pub fn clear_cache(&mut self) {
         self.cache.clear();
+        self.ite_cache.clear();
     }
 }
 

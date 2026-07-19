@@ -11,10 +11,24 @@ pub enum MddOperation {
     Replace,
 }
 
+impl MddOperation {
+    /// Compact code for use as a computed-table key word.
+    #[inline]
+    pub(crate) fn code(&self) -> u32 {
+        match self {
+            MddOperation::Not => 0,
+            MddOperation::And => 1,
+            MddOperation::Or => 2,
+            MddOperation::XOr => 3,
+            MddOperation::Replace => 4,
+        }
+    }
+}
+
 impl MddManager {
     pub fn not(&mut self, f: NodeId) -> NodeId {
         let key = (MddOperation::Not, f, 0);
-        if let Some(&nodeid) = self.get_cache().get(&key) {
+        if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
         }
         let node = match self.get_node(&f).unwrap() {
@@ -28,13 +42,13 @@ impl MddManager {
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MddOperation::And, f, g);
-        if let Some(&nodeid) = self.get_cache().get(&key) {
+        if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
         }
         let node = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
@@ -73,13 +87,13 @@ impl MddManager {
             (_, Node::Zero) => self.zero(),
             (_, Node::One) => f,
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn or(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MddOperation::Or, f, g);
-        if let Some(&nodeid) = self.get_cache().get(&key) {
+        if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
         }
         let node = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
@@ -118,13 +132,13 @@ impl MddManager {
             (_, Node::Zero) => f,
             (_, Node::One) => self.one(),
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
     pub fn xor(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MddOperation::XOr, f, g);
-        if let Some(&nodeid) = self.get_cache().get(&key) {
+        if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
         }
         let node = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
@@ -165,7 +179,7 @@ impl MddManager {
             (_, Node::Zero) => f,
             (_, Node::One) => self.not(f),
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 
@@ -198,7 +212,7 @@ impl MddManager {
 
     pub fn replace(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MddOperation::Replace, f, g);
-        if let Some(&nodeid) = self.get_cache().get(&key) {
+        if let Some(nodeid) = self.cache_get(&key) {
             return nodeid;
         }
         let node = match (self.get_node(&f).unwrap(), self.get_node(&g).unwrap()) {
@@ -246,7 +260,7 @@ impl MddManager {
                 self.create_node(headerid, &nodes)
             }
         };
-        self.get_mut_cache().insert(key, node);
+        self.cache_put(key, node);
         node
     }
 }

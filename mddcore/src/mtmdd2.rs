@@ -14,8 +14,9 @@ pub enum Node {
 pub struct MtMdd2Manager<V> {
     mdd: mdd::MddManager,
     mtmdd: mtmdd::MtMddManager<V>,
-    bcache: BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId>,
-    vcache: BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId>,
+    // Direct-mapped, lossy computed tables (CUDD-style); see common::ComputeCache.
+    bcache: ComputeCache,
+    vcache: ComputeCache,
 }
 
 impl<V> MtMdd2Manager<V>
@@ -26,8 +27,8 @@ where
         Self {
             mdd: mdd::MddManager::new(),
             mtmdd: mtmdd::MtMddManager::new(),
-            bcache: BddHashMap::default(),
-            vcache: BddHashMap::default(),
+            bcache: ComputeCache::new(),
+            vcache: ComputeCache::new(),
         }
     }
 
@@ -111,23 +112,29 @@ where
     }
 
     #[inline]
-    pub fn get_vcache(&self) -> &BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId> {
-        &self.vcache
+    pub(crate) fn vcache_get(&self, key: &(MtMdd2Operation, NodeId, NodeId)) -> Option<NodeId> {
+        self.vcache
+            .get(key.0.code(), key.1 as u32, key.2 as u32)
+            .map(|v| v as NodeId)
     }
 
     #[inline]
-    pub fn get_bcache(&self) -> &BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId> {
-        &self.bcache
+    pub(crate) fn vcache_put(&mut self, key: (MtMdd2Operation, NodeId, NodeId), val: NodeId) {
+        self.vcache
+            .put(key.0.code(), key.1 as u32, key.2 as u32, val as u32);
     }
 
     #[inline]
-    pub fn get_mut_vcache(&mut self) -> &mut BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId> {
-        &mut self.vcache
+    pub(crate) fn bcache_get(&self, key: &(MtMdd2Operation, NodeId, NodeId)) -> Option<NodeId> {
+        self.bcache
+            .get(key.0.code(), key.1 as u32, key.2 as u32)
+            .map(|v| v as NodeId)
     }
 
     #[inline]
-    pub fn get_mut_bcache(&mut self) -> &mut BddHashMap<(MtMdd2Operation, NodeId, NodeId), NodeId> {
-        &mut self.bcache
+    pub(crate) fn bcache_put(&mut self, key: (MtMdd2Operation, NodeId, NodeId), val: NodeId) {
+        self.bcache
+            .put(key.0.code(), key.1 as u32, key.2 as u32, val as u32);
     }
 
     #[inline]

@@ -26,6 +26,7 @@
 //! [`relibmss`](https://github.com/MssReliab/relibmss) Python package.
 
 pub mod common;
+pub mod compute_cache;
 pub mod dot;
 pub mod nodes;
 
@@ -34,6 +35,7 @@ pub mod prelude {
     pub use std::slice::Iter;
     pub use crate::common::{BddHashSet, BddHashMap};
     pub use crate::common::{HeaderId, Level, NodeId, OperationId};
+    pub use crate::compute_cache::ComputeCache;
     pub use crate::nodes::{NonTerminal, Terminal, NodeHeader, DDForest};
     pub use crate::dot::Dot;
 }

@@ -45,9 +45,14 @@ impl BddManager {
         result
     }
 
-    pub fn and(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn and(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
         if f == g {
             return f;
+        }
+        // Commutative: canonicalize operand order so and(a,b) and and(b,a)
+        // share a computed-table entry (CUDD-style), improving hit rate.
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
         }
         let key = (Operation::And, f as u32, g as u32);
         if let Some(x) = self.cache_get(&key) {
@@ -91,9 +96,12 @@ impl BddManager {
         result
     }
 
-    pub fn or(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn or(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
         if f == g {
             return f;
+        }
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
         }
         let key = (Operation::Or, f as u32, g as u32);
         if let Some(x) = self.cache_get(&key) {
@@ -137,7 +145,7 @@ impl BddManager {
         result
     }
 
-    pub fn xor(&mut self, f: NodeId, g: NodeId) -> NodeId {
+    pub fn xor(&mut self, mut f: NodeId, mut g: NodeId) -> NodeId {
         if f == g {
             // f xor f = 0, except undet xor undet = undet
             return if f == self.undet() {
@@ -145,6 +153,9 @@ impl BddManager {
             } else {
                 self.zero()
             };
+        }
+        if f > g {
+            std::mem::swap(&mut f, &mut g);
         }
         let key = (Operation::XOr, f as u32, g as u32);
         if let Some(x) = self.cache_get(&key) {
@@ -208,10 +219,77 @@ impl BddManager {
         self.not(tmp)
     }
 
+    /// Native `if-then-else`: `ite(f,g,h)` = "if f then g else h".
+    ///
+    /// A single Shannon recursion over the top variable of `f`/`g`/`h`, with its
+    /// own computed table — versus the earlier `or(and(f,g), and(not f,h))`, which
+    /// ran four separate apply traversals (and, not, and, or) per call. Semantics
+    /// are identical, including `Undet` propagation: a terminal `f` selects one
+    /// branch (so an `Undet` in the *other* branch is ignored), and `Undet` in the
+    /// selected branch propagates outward.
     pub fn ite(&mut self, f: NodeId, g: NodeId, h: NodeId) -> NodeId {
-        let x1 = self.and(f, g);
-        let barf = self.not(f);
-        let x2 = self.and(barf, h);
-        self.or(x1, x2)
+        // Terminal cases on the condition.
+        match self.get_node(&f).unwrap() {
+            Node::One => return g,
+            Node::Zero => return h,
+            Node::Undet => return self.undet(),
+            Node::NonTerminal(_) => {}
+        }
+        // f is non-terminal here.
+        if g == h {
+            return g;
+        }
+        if let Some(x) = self.ite_cache_get(f, g, h) {
+            return x;
+        }
+
+        // Split on the top variable = the highest *real* level among the
+        // operands (root has the largest level here; terminals report the
+        // `Level::MAX` sentinel and must be excluded). `f` is non-terminal, so
+        // its level seeds the max.
+        let mut top = self.node_level(f);
+        for x in [g, h] {
+            let lx = self.node_level(x);
+            if lx != Level::MAX && lx > top {
+                top = lx;
+            }
+        }
+        let (f0, f1) = self.cofactor(f, top);
+        let (g0, g1) = self.cofactor(g, top);
+        let (h0, h1) = self.cofactor(h, top);
+        let headerid = self.top_header(f, g, h, top);
+
+        let low = self.ite(f0, g0, h0);
+        let high = self.ite(f1, g1, h1);
+        let result = self.create_node(headerid, low, high);
+        self.ite_cache_put(f, g, h, result);
+        result
+    }
+
+    /// Split `id` on variable level `top`: if `id` is a non-terminal at that
+    /// level, return its (low, high) children; otherwise it does not depend on
+    /// the variable, so both cofactors are `id` itself.
+    #[inline]
+    fn cofactor(&self, id: NodeId, top: Level) -> (NodeId, NodeId) {
+        if self.node_level(id) == top {
+            if let Node::NonTerminal(n) = self.get_node(&id).unwrap() {
+                return (n.edge(0), n.edge(1));
+            }
+        }
+        (id, id)
+    }
+
+    /// Header id of whichever of `f`/`g`/`h` sits at level `top` (they share the
+    /// same variable, hence the same header). At least one always matches.
+    #[inline]
+    fn top_header(&self, f: NodeId, g: NodeId, h: NodeId, top: Level) -> HeaderId {
+        for x in [f, g, h] {
+            if self.node_level(x) == top {
+                if let Node::NonTerminal(n) = self.get_node(&x).unwrap() {
+                    return n.headerid();
+                }
+            }
+        }
+        unreachable!("ite: top level has no matching non-terminal operand")
     }
 }

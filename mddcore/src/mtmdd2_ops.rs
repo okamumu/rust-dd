@@ -17,6 +17,18 @@ pub enum MtMdd2Operation {
     If,
 }
 
+impl MtMdd2Operation {
+    /// Compact code for use as a computed-table key word.
+    #[inline]
+    pub(crate) fn code(&self) -> u32 {
+        match self {
+            MtMdd2Operation::Eq => 0,
+            MtMdd2Operation::Lt => 1,
+            MtMdd2Operation::If => 2,
+        }
+    }
+}
+
 impl<V> MtMdd2Manager<V>
 where
     V: MddValue,
@@ -109,8 +121,8 @@ where
 
     pub fn veq(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMdd2Operation::Eq, f, g);
-        if let Some(x) = self.get_bcache().get(&key) {
-            return *x;
+        if let Some(x) = self.bcache_get(&key) {
+            return x;
         }
         let node = match (
             self.mtmdd().get_node(&f).unwrap(),
@@ -162,7 +174,7 @@ where
                 self.mdd_mut().create_node(headerid, &nodes)
             }
         };
-        self.get_mut_bcache().insert(key, node);
+        self.bcache_put(key, node);
         node
     }
 
@@ -186,8 +198,8 @@ where
 
     pub fn vlt(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMdd2Operation::Lt, f, g);
-        if let Some(x) = self.get_bcache().get(&key) {
-            return *x;
+        if let Some(x) = self.bcache_get(&key) {
+            return x;
         }
         let node = match (
             self.mtmdd().get_node(&f).unwrap(),
@@ -239,7 +251,7 @@ where
                 self.mdd_mut().create_node(headerid, &nodes)
             }
         };
-        self.get_mut_bcache().insert(key, node);
+        self.bcache_put(key, node);
         node
     }
 
@@ -305,8 +317,8 @@ where
 
     pub fn vif(&mut self, f: NodeId, g: NodeId) -> NodeId {
         let key = (MtMdd2Operation::If, f, g);
-        if let Some(x) = self.get_vcache().get(&key) {
-            return *x;
+        if let Some(x) = self.vcache_get(&key) {
+            return x;
         }
         let node = match (
             self.mdd().get_node(&f).unwrap(),
@@ -350,7 +362,7 @@ where
                 self.mtmdd_mut().create_node(headerid, &nodes)
             }
         };
-        self.get_mut_vcache().insert(key, node);
+        self.vcache_put(key, node);
         node
     }
 }

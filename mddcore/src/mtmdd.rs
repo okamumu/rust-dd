@@ -65,7 +65,7 @@ pub struct MtMddManager<V> {
     undet: NodeId,
     vtable: BddHashMap<V, NodeId>,
     utable: BddHashMap<(HeaderId, Box<[NodeId]>), NodeId>,
-    cache: BddHashMap<(MtMddOperation, NodeId, NodeId), NodeId>,
+    cache: ComputeCache,
     // Slots in `nodes` reclaimed by gc(), available for reuse.
     freelist: Vec<NodeId>,
 }
@@ -118,7 +118,7 @@ where
         };
         let vtable = BddHashMap::default();
         let utable = BddHashMap::default();
-        let cache = BddHashMap::default();
+        let cache = ComputeCache::new();
         Self {
             headers,
             nodes,
@@ -177,8 +177,7 @@ where
         // Keep memoized results that only reference surviving nodes (operands
         // and results may be value terminals, also covered by `live`); drop only
         // entries touching a reclaimed slot.
-        self.cache
-            .retain(|k, &mut v| live[k.1] && live[k.2] && live[v]);
+        self.cache.retain_live(&live);
 
         self.freelist.clear();
         for (id, &alive) in live.iter().enumerate() {
@@ -242,14 +241,19 @@ where
         self.undet
     }
 
+    /// Look up a memoized apply result.
     #[inline]
-    pub fn get_cache(&self) -> &BddHashMap<(MtMddOperation, NodeId, NodeId), NodeId> {
-        &self.cache
+    pub(crate) fn cache_get(&self, key: &(MtMddOperation, NodeId, NodeId)) -> Option<NodeId> {
+        self.cache
+            .get(key.0.code(), key.1 as u32, key.2 as u32)
+            .map(|v| v as NodeId)
     }
 
+    /// Memoize an apply result.
     #[inline]
-    pub fn get_mut_cache(&mut self) -> &mut BddHashMap<(MtMddOperation, NodeId, NodeId), NodeId> {
-        &mut self.cache
+    pub(crate) fn cache_put(&mut self, key: (MtMddOperation, NodeId, NodeId), val: NodeId) {
+        self.cache
+            .put(key.0.code(), key.1 as u32, key.2 as u32, val as u32);
     }
 
     #[inline]
