@@ -20,6 +20,12 @@ const INIT_BITS: u32 = 14;
 /// Hard ceiling on growth (2^24 slots = 256 MiB); beyond this it stays lossy.
 const MAX_BITS: u32 = 24;
 
+/// Direct-mapped, lossy computed table for DD `apply` memoization (CUDD-style).
+///
+/// A fixed power-of-two array of `[k0, k1, k2, val]` slots indexed by
+/// `hash(key) & mask`, overwritten on collision. Being lossy is safe: a miss only
+/// triggers a recomputation, never a wrong answer. See the module docs for the
+/// rationale versus a growing `HashMap`.
 #[derive(Debug)]
 pub struct ComputeCache {
     slots: Vec<[u32; 4]>,

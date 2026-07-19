@@ -6,7 +6,8 @@
 //! [`BddHashSet`](common::BddHashSet) aliases (std hashmaps with a `wyhash` hasher), and
 //! the core traits ([`Terminal`](nodes::Terminal), [`NonTerminal`](nodes::NonTerminal),
 //! [`NodeHeader`](nodes::NodeHeader), [`DDForest`](nodes::DDForest), [`Dot`](dot::Dot))
-//! that the DD managers implement.
+//! that the DD managers implement. It also provides the shared, direct-mapped
+//! [`ComputeCache`](compute_cache::ComputeCache) used to memoize `apply` results.
 //!
 //! **This crate is not meant to be used directly.** Depend on one of the crates built on
 //! top of it instead:
