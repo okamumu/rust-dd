@@ -498,13 +498,30 @@ impl BddNode {
         bdd_prob::bmeas(&mut bdd.clone().borrow_mut(), ss, self.node, &pv)
     }
 
-    // obtain minimal path vectors (mpvs) of monotone BDD
-    pub fn minpath(&self) -> BddNode {
+    /// Minimal path/cut vectors (minimal solutions) of a **monotone (coherent)**
+    /// BDD, or `None` if the function is not monotone.
+    ///
+    /// The Rauzy minsol decomposition is only valid for monotone functions;
+    /// feeding a non-monotone one (e.g. built with `xor`, `!`, or a `<`/`!=`
+    /// comparison) has no meaningful minimal solutions. Monotonicity is checked
+    /// inside the recursion and aborts early on the first violation.
+    pub fn minpath_checked(&self) -> Option<BddNode> {
         let bdd = self.parent.upgrade().unwrap();
         let mut cache1 = BddHashMap::default();
         let mut cache2 = BddHashMap::default();
-        let result = bdd_minsol::minsol(&mut bdd.borrow_mut(), self.node, &mut cache1, &mut cache2);
-        self.rewrap(&bdd, result)
+        let result = {
+            let mut mgr = bdd.borrow_mut();
+            bdd_minsol::minsol(&mut mgr, self.node, &mut cache1, &mut cache2)
+        };
+        result.map(|r| self.rewrap(&bdd, r))
+    }
+
+    /// Minimal path vectors (mpvs) of a monotone BDD. Panics if the function is
+    /// not monotone — use [`minpath_checked`](Self::minpath_checked) to handle
+    /// that case.
+    pub fn minpath(&self) -> BddNode {
+        self.minpath_checked()
+            .expect("minpath requires a monotone (coherent) function")
     }
 
     pub fn bdd_count(&self, ss: &[bool]) -> u64 {

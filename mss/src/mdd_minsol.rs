@@ -1,6 +1,16 @@
 use mddcore::prelude::*;
 
-pub fn minsol<V>(mdd: &mut MtMdd2Manager<V>, node: &Node) -> Node
+/// Minimal solutions of a **coherent (monotone)** MTMDD2 structure function, or
+/// `None` if the function is not coherent.
+///
+/// Coherence is checked bottom-up inside the recursion via the local invariant
+/// **"the cofactors of every node form a pointwise ascending chain"**, verified
+/// on the canonical (hash-consed) diagram so each adjacent test is O(1):
+/// - value forest (`vminsol`): `min(c_{i-1}, c_i) == c_{i-1}`  (i.e. c_{i-1} ≤ c_i),
+/// - bool forest (`bminsol`):  `and(c_{i-1}, c_i) == c_{i-1}`  (i.e. c_{i-1} ⇒ c_i).
+///
+/// The first violation short-circuits to `None`.
+pub fn minsol<V>(mdd: &mut MtMdd2Manager<V>, node: &Node) -> Option<Node>
 where
     V: MddValue,
 {
@@ -8,14 +18,12 @@ where
         Node::Value(fnode) => {
             let mut cache1 = BddHashMap::default();
             let mut cache2 = BddHashMap::default();
-            let result = vminsol(&mut mdd.mtmdd_mut(), *fnode, &mut cache1, &mut cache2);
-            Node::Value(result)
+            vminsol(&mut mdd.mtmdd_mut(), *fnode, &mut cache1, &mut cache2).map(Node::Value)
         }
         Node::Bool(fnode) => {
             let mut cache1 = BddHashMap::default();
             let mut cache2 = BddHashMap::default();
-            let result = bminsol(&mut mdd.mdd_mut(), *fnode, &mut cache1, &mut cache2);
-            Node::Bool(result)
+            bminsol(&mut mdd.mdd_mut(), *fnode, &mut cache1, &mut cache2).map(Node::Bool)
         }
     }
 }
@@ -23,9 +31,9 @@ where
 fn vminsol<V>(
     dd: &mut mtmdd::MtMddManager<V>,
     node: NodeId,
-    cache1: &mut BddHashMap<NodeId, NodeId>,
+    cache1: &mut BddHashMap<NodeId, Option<NodeId>>,
     cache2: &mut BddHashMap<(NodeId, NodeId), NodeId>,
-) -> NodeId
+) -> Option<NodeId>
 where
     V: MddValue,
 {
@@ -34,24 +42,45 @@ where
         return *x;
     }
     let result = match dd.get_node(&node).unwrap() {
-        mtmdd::Node::Terminal(_fnode) => node,
+        mtmdd::Node::Terminal(_fnode) => Some(node),
+        mtmdd::Node::Undet => Some(dd.undet()),
         mtmdd::Node::NonTerminal(fnode) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().collect();
-            let mut result = Vec::new();
-            for (i, x) in fnodeid.iter().enumerate() {
-                if i == 0 {
-                    let tmp = vminsol(dd, *x, cache1, cache2);
-                    result.push(tmp);
+            let children: Vec<NodeId> = fnode.iter().collect();
+            // Coherence in this variable: cofactors ascend pointwise, i.e.
+            // min(c_{i-1}, c_i) == c_{i-1} (canonical -> O(1) id compare).
+            let mono = (1..children.len())
+                .all(|i| dd.min(children[i - 1], children[i]) == children[i - 1]);
+            if !mono {
+                None
+            } else {
+                // Coherence in the other variables: recurse, aborting on the
+                // first non-coherent child.
+                let mut result = Vec::with_capacity(children.len());
+                let mut ok = true;
+                for (i, &c) in children.iter().enumerate() {
+                    match vminsol(dd, c, cache1, cache2) {
+                        None => {
+                            ok = false;
+                            break;
+                        }
+                        Some(m) => {
+                            let v = if i == 0 {
+                                m
+                            } else {
+                                vwithout(dd, children[i - 1], m, cache2)
+                            };
+                            result.push(v);
+                        }
+                    }
+                }
+                if ok {
+                    Some(dd.create_node(headerid, &result))
                 } else {
-                    let tmp = vminsol(dd, *x, cache1, cache2);
-                    let tmp2 = vwithout(dd, fnodeid[i - 1], tmp, cache2);
-                    result.push(tmp2);
+                    None
                 }
             }
-            dd.create_node(headerid, &result)
         }
-        mtmdd::Node::Undet => dd.undet(),
     };
     cache1.insert(key, result);
     result
@@ -133,33 +162,52 @@ where
 fn bminsol(
     dd: &mut mdd::MddManager,
     node: NodeId,
-    cache1: &mut BddHashMap<NodeId, NodeId>,
+    cache1: &mut BddHashMap<NodeId, Option<NodeId>>,
     cache2: &mut BddHashMap<(NodeId, NodeId), NodeId>,
-) -> NodeId {
+) -> Option<NodeId> {
     let key = node;
     if let Some(x) = cache1.get(&key) {
         return *x;
     }
     let result = match dd.get_node(&node).unwrap() {
-        mdd::Node::Zero => dd.undet(),
-        mdd::Node::One => node,
+        mdd::Node::Zero => Some(dd.undet()),
+        mdd::Node::One => Some(node),
+        mdd::Node::Undet => Some(dd.undet()),
         mdd::Node::NonTerminal(fnode) => {
             let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().collect();
-            let mut result = Vec::new();
-            for (i, x) in fnodeid.iter().enumerate() {
-                if i == 0 {
-                    let tmp = bminsol(dd, *x, cache1, cache2);
-                    result.push(tmp);
+            let children: Vec<NodeId> = fnode.iter().collect();
+            // Coherence in this variable: cofactors ascend, i.e. c_{i-1} => c_i,
+            // and(c_{i-1}, c_i) == c_{i-1} (canonical -> O(1) id compare).
+            let mono = (1..children.len())
+                .all(|i| dd.and(children[i - 1], children[i]) == children[i - 1]);
+            if !mono {
+                None
+            } else {
+                let mut result = Vec::with_capacity(children.len());
+                let mut ok = true;
+                for (i, &c) in children.iter().enumerate() {
+                    match bminsol(dd, c, cache1, cache2) {
+                        None => {
+                            ok = false;
+                            break;
+                        }
+                        Some(m) => {
+                            let v = if i == 0 {
+                                m
+                            } else {
+                                bwithout(dd, children[i - 1], m, cache2)
+                            };
+                            result.push(v);
+                        }
+                    }
+                }
+                if ok {
+                    Some(dd.create_node(headerid, &result))
                 } else {
-                    let tmp = bminsol(dd, *x, cache1, cache2);
-                    let tmp2 = bwithout(dd, fnodeid[i - 1], tmp, cache2);
-                    result.push(tmp2);
+                    None
                 }
             }
-            dd.create_node(headerid, &result)
         }
-        mdd::Node::Undet => dd.undet(),
     };
     cache1.insert(key, result);
     result
@@ -246,7 +294,8 @@ mod tests {
     fn test_minsol() {
         let (node, mut mgr) = create_mdd();
         println!("{}", mgr.dot_string(&node));
-        let result = minsol(&mut mgr, &node);
+        // phi = (x+y)*z is coherent (non-decreasing in each component) -> Some.
+        let result = minsol(&mut mgr, &node).expect("(x+y)*z is coherent");
         println!("{}", mgr.dot_string(&result));
     }
 }

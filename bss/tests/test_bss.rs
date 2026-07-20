@@ -122,3 +122,38 @@ fn test_node_count() {
     println!("{}", z.dot());
     println!("{:?}", z.size());
 }
+#[test]
+fn test_minpath_monotone_detection() {
+    let mut bss = BddMgr::new();
+    let x = bss.defvar("x");
+    let y = bss.defvar("y");
+    let z = bss.defvar("z");
+
+    // Monotone (coherent): built from positive literals with and/or.
+    let mono = x.and(&y).or(&z);
+    assert!(
+        mono.minpath_checked().is_some(),
+        "and/or of positive literals must be detected monotone"
+    );
+    // minpath() must not panic on a monotone function, and must agree with the
+    // checked variant (unchanged result for monotone inputs).
+    let mp = mono.minpath();
+    assert_eq!(mp.size(), mono.minpath_checked().unwrap().size());
+
+    // Non-monotone functions -> None (early abort), and minpath() would panic.
+    assert!(x.xor(&y).minpath_checked().is_none(), "xor is non-monotone");
+    assert!(
+        x.and(&y.not()).minpath_checked().is_none(),
+        "x & !y is non-monotone"
+    );
+    assert!(z.not().minpath_checked().is_none(), "!z is non-monotone");
+}
+
+#[test]
+#[should_panic(expected = "monotone")]
+fn test_minpath_panics_on_nonmonotone() {
+    let mut bss = BddMgr::new();
+    let x = bss.defvar("x");
+    let y = bss.defvar("y");
+    let _ = x.xor(&y).minpath(); // must panic
+}
