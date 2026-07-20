@@ -1,3 +1,15 @@
+## relib-mss 0.6.0
+
+- Coherence-checked `minpath`. `MddNode::minpath_checked() -> Option<MddNode<V>>`
+  returns `None` when the structure function is not coherent (monotone). Detection
+  is folded into the minsol recursion via the local invariant "cofactors ascend
+  pointwise", an O(1) id compare on the canonical diagram after one meet apply:
+  `and(c[i-1], c[i]) == c[i-1]` on the boolean forest, `min(c[i-1], c[i]) == c[i-1]`
+  on the value (MTMDD) forest. Aborts on the first violation.
+- `minpath()` keeps its signature but now **panics** on a non-coherent input
+  (previously silently-wrong).
+- **Breaking**: `mdd_minsol::minsol` now returns `Option<Node>`.
+
 ## relib-mss 0.5.1
 
 - Inherit the `relib-mdd` 0.5.1 u32 node storage (lower memory on large

@@ -1,3 +1,15 @@
+## relib-bss 0.6.0
+
+- Coherence-checked `minpath`. `BddNode::minpath_checked() -> Option<BddNode>`
+  returns `None` when the function is not monotone (coherent); the Rauzy minsol
+  decomposition is only valid for coherent functions. Detection is folded into
+  the minsol recursion via the local invariant `and(f0, f1) == f0` (`f0 ⇒ f1`,
+  an O(1) id compare on the canonical BDD) and aborts on the first violation, so
+  a non-coherent input never builds a meaningless result.
+- `minpath()` keeps its signature but now **panics** on a non-coherent input
+  (previously it returned a silently-wrong result).
+- **Breaking**: `bdd_minsol::minsol` now returns `Option<NodeId>`.
+
 ## relib-bss 0.5.1
 
 - Version bump for workspace lockstep; no functional changes.

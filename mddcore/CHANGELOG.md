@@ -1,3 +1,7 @@
+## relib-mdd 0.6.0
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-mdd 0.5.1
 
 - Store node ids/children as `u32` (like `relib-bdd`): `NonTerminalMDD` becomes
