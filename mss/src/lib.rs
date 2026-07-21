@@ -2,8 +2,8 @@
 //!
 //! This crate provides an ergonomic, value-style API (`MddMgr<V>` / `MddNode<V>`) on top
 //! of the arena-based MTMDD2 engine in `relib-mdd` (`mddcore`). It computes multi-state
-//! system probability, minimal path/cut vectors, and counting, keeping the
-//! decision-diagram engine and the analysis passes tightly integrated.
+//! system probability, Birnbaum importance, minimal path/cut vectors, and counting, keeping
+//! the decision-diagram engine and the analysis passes tightly integrated.
 //!
 //! It is the Rust engine behind the MSS/MDD side of the
 //! [`relibmss`](https://github.com/MssReliab/relibmss) Python package. `relibmss` is the

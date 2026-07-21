@@ -2,6 +2,72 @@ use std::collections::HashMap;
 
 use mss::prelude::*;
 
+/// `bmeas[x][d]` must equal `P(φ∈ss | x=d+1) − P(φ∈ss | x=d)`, where each conditional is
+/// `prob` computed with `x` pinned to that state (its probability vector replaced by a unit
+/// vector). Verified for every (variable, transition) on both the value forest
+/// (`max(min(x,y),z)`) and the boolean forest (`[x>=1] & [y>=2]`).
+#[test]
+fn test_bmeas_matches_pinned_prob() {
+    fn check(mgr_build: impl Fn(&mut MddMgr<i32>) -> MddNode<i32>, k: usize) {
+        let mut mgr: MddMgr<i32> = MddMgr::new();
+        let mut node = mgr_build(&mut mgr);
+        let states = 3usize;
+        // Arbitrary non-degenerate probability vectors per variable.
+        let base: HashMap<String, Vec<f64>> = [
+            ("x", vec![0.2, 0.3, 0.5]),
+            ("y", vec![0.5, 0.1, 0.4]),
+            ("z", vec![0.25, 0.25, 0.5]),
+        ]
+        .iter()
+        .map(|(s, v)| (s.to_string(), v.clone()))
+        .collect();
+        let ss: Vec<i32> = (1..k as i32).collect(); // success = performance >= 1
+
+        // P(φ∈ss | var = j): pin `var` to state j (unit vector e_j).
+        let cond = |node: &mut MddNode<i32>, var: &str, j: usize| {
+            let mut pinned = base.clone();
+            let mut e = vec![0.0; states];
+            e[j] = 1.0;
+            pinned.insert(var.to_string(), e);
+            node.prob(&pinned, &ss)
+        };
+
+        let bm = node.bmeas(&base, &ss);
+        for (var, vec) in &bm {
+            assert_eq!(vec.len(), states - 1, "one difference per state boundary");
+            for (d, &g) in vec.iter().enumerate() {
+                let expected = cond(&mut node, var, d + 1) - cond(&mut node, var, d);
+                assert!(
+                    (g - expected).abs() < 1e-9,
+                    "bmeas[{var}][{d}] = {g}, expected P(.|{var}={}) - P(.|{var}={d}) = {expected}",
+                    d + 1
+                );
+            }
+        }
+    }
+    // value forest: max(min(x,y), z), K = 3 (values 0..2)
+    check(
+        |mgr| {
+            let x = mgr.defvar("x", 3);
+            let y = mgr.defvar("y", 3);
+            let z = mgr.defvar("z", 3);
+            x.min(&y).max(&z)
+        },
+        3,
+    );
+    // boolean forest: [x>=1] & [y>=2]  (a Bool-tagged structure function)
+    check(
+        |mgr| {
+            let x = mgr.defvar("x", 3);
+            let y = mgr.defvar("y", 3);
+            let one = mgr.value(1);
+            let two = mgr.value(2);
+            x.ge(&one).and(&y.ge(&two))
+        },
+        2,
+    );
+}
+
 #[test]
 fn test_mdd_mgr() {
     let mut mgr: MddMgr<i32> = MddMgr::new();

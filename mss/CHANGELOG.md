@@ -1,3 +1,13 @@
+## relib-mss 0.11.0
+
+- **New: multi-state Birnbaum importance — `MddNode::bmeas`** (`mdd_prob::bmeas`). Returns,
+  per variable, the adjacent-state differences
+  `D_{i,j} = P(φ∈ss | x_i=j) − P(φ∈ss | x_i=j−1)` (vector length `M_i − 1`), computed in one
+  backward-differentiation pass — the multi-state generalization of `relib-bss`'s `bmeas`
+  (which is the binary case `P(φ∈ss|x=1) − P(φ∈ss|x=0)`). The difference form is the correct
+  quantity on a reduced diagram: variables skipped on a path are irrelevant there and cancel
+  out of every `D_{i,j}`. Real-valued only this round (no interval version yet).
+
 ## relib-mss 0.10.0
 
 - **New: `ZmddMgr` / `ZmddNode`** — minimal path vector families as genuine ZMDDs, with the

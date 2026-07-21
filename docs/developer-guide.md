@@ -164,7 +164,10 @@ recursion which is `O(2ⁿ)` (a fixed historical bug). Result is the canonical D
   `mddcore::zmdd_ops` provides `intersect`/`setdiff` (label-wise, partition-preserving — its
   level-mismatch arm descends the 0-edge, same principle as `bdd_minsol::without`). `union` /
   arithmetic apply / dominance / threshold / relabel are future work.
-- **bmeas** (BSS) — per-variable importance measures.
+- **bmeas** (BSS `bdd_prob`, MSS `mdd_prob`) — Birnbaum importance by one backward-diff
+  (reverse-mode gradient) pass. BSS returns `P(φ|x=1) − P(φ|x=0)` per variable; MSS returns
+  the adjacent-state differences `P(φ∈ss|x_i=j) − P(φ∈ss|x_i=j−1)` (length `M_i−1`). The
+  difference form is skip-safe on reduced diagrams (variables irrelevant on a path cancel).
 
 ### 3.6 RPN bridge (`BddMgr::rpn` / `MddMgr::rpn`)
 
@@ -269,7 +272,7 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | arithmetic (value) | `add`, `sub`, `mul`, `div`, `min`, `max` |
 | comparison (value→bool) | `eq`, `ne`, `lt`, `le`, `gt`, `ge` |
 | logic (bool) | `and`, `or`, `xor`, `not`, `ite` |
-| analysis | `prob`, `mdd_count`/`mdd_extract`, `size` |
+| analysis | `prob`, `bmeas` (Birnbaum importance), `mdd_count`/`mdd_extract`, `size` |
 | introspection | `get_id`, `get_id2`, `get_node`, `get_header`, `get_level`, `get_label`, `get_children`, `is_boolean/value/zero/one/undet`, `value`, `dot` |
 | ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `size` (`ZmddNode`) |
 

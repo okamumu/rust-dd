@@ -1,3 +1,7 @@
+## relib-common 0.11.0
+
+- Version bump for workspace lockstep; no functional changes (the new MSS Birnbaum importance `mss::MddNode::bmeas` lives in `relib-mss`).
+
 ## relib-common 0.10.0
 
 - Version bump for workspace lockstep; no functional changes.

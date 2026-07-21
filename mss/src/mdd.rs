@@ -897,6 +897,29 @@ where
         mdd_prob::prob(&mut mdd, &self.node, pv, &hashset)
     }
 
+    /// Multi-state Birnbaum importance of every variable for the success set `ss`, as
+    /// `{var: [D_1, …, D_{M-1}]}` where `M` is the variable's state count and
+    /// `D_j = P(φ∈ss | var = j) − P(φ∈ss | var = j−1)` is the importance of raising the
+    /// component across the `j−1 → j` state boundary (index `d` = transition `d → d+1`).
+    /// For a binary variable this is the single classic Birnbaum measure
+    /// `P(φ∈ss | var=1) − P(φ∈ss | var=0)`. Computed in one backward-differentiation pass
+    /// (see [`crate::mdd_prob::bmeas`]).
+    pub fn bmeas<T>(&mut self, pv: &HashMap<String, Vec<T>>, ss: &[V]) -> HashMap<String, Vec<T>>
+    where
+        T: Add<Output = T>
+            + Sub<Output = T>
+            + Mul<Output = T>
+            + Clone
+            + Copy
+            + PartialEq
+            + From<f64>,
+    {
+        let mgr = self.parent.upgrade().unwrap();
+        let mut mdd = mgr.borrow_mut();
+        let hashset: HashSet<V> = ss.iter().cloned().collect();
+        mdd_prob::bmeas(&mut mdd, &self.node, pv, &hashset)
+    }
+
     // `minpath` lives on [`MssMgr`](crate::mss::MssMgr) (it also needs a `ZmddMgr`);
     // it returns a genuine `ZmddNode` set family.
 
