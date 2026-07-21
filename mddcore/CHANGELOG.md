@@ -1,3 +1,7 @@
+## relib-mdd 0.13.0
+
+- **New: Graphviz output for `ZmddManager`** (`zmdd_dot.rs`, `Dot` impl) — `dot`/`dot_string` now work on a ZMDD forest, mirroring the MDD/MTMDD renderers. Unlike those, the **0-edge is drawn**: in a ZMDD it carries the "component absent from the sparse vector" branch, so omitting it would lose structure. `Undet` renders as the empty family; terminals show their label.
+
 ## relib-mdd 0.12.0
 
 - Version bump for workspace lockstep; no functional changes (the new MSS `mincut` lives in `relib-mss`).

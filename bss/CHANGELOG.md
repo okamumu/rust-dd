@@ -1,3 +1,7 @@
+## relib-bss 0.13.0
+
+- Version bump for workspace lockstep; no functional changes (the new ZMDD Graphviz output lives in `relib-mdd`/`relib-mss`).
+
 ## relib-bss 0.12.0
 
 - Version bump for workspace lockstep; no functional changes (the new MSS `mincut` lives in `relib-mss`).

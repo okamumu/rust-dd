@@ -43,6 +43,7 @@ pub mod mtmdd2_ops;
 pub mod mtmdd2_dot;
 
 pub mod zmdd;
+pub mod zmdd_dot;
 pub mod zmdd_ops;
 
 pub mod prelude {

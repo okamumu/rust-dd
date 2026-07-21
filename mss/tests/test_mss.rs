@@ -342,3 +342,20 @@ fn test_zmdd_intersect_setdiff() {
     );
     assert_eq!(diff.count(&ss), 2);
 }
+
+#[test]
+fn test_zmdd_dot() {
+    let mut mgr: MssMgr<i32> = MssMgr::new();
+    let x = mgr.defvar("x", 3);
+    let y = mgr.defvar("y", 3);
+    let z = mgr.defvar("z", 3);
+    let f = x.min(&y).max(&z);
+    let a = mgr.minpath(&f).expect("coherent");
+
+    let dot = a.dot();
+    assert!(dot.starts_with("digraph {"));
+    assert!(dot.trim_end().ends_with('}'));
+    for label in ["x", "y", "z"] {
+        assert!(dot.contains(&format!("label=\"{}\"", label)), "missing {}", label);
+    }
+}

@@ -279,7 +279,7 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | logic (bool) | `and`, `or`, `xor`, `not`, `ite` |
 | analysis | `prob`, `bmeas` (Birnbaum importance), `mdd_count`/`mdd_extract`, `size` |
 | introspection | `get_id`, `get_id2`, `get_node`, `get_header`, `get_level`, `get_label`, `get_children`, `is_boolean/value/zero/one/undet`, `value`, `dot` |
-| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath`/`mincut` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `size` (`ZmddNode`) |
+| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath`/`mincut` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `dot`, `size` (`ZmddNode`) |
 
 Two API styles coexist (see `README.md`): an older `Context`-centric style and the current
 node-centric style (`mgr.getbdd(top).prob(...)` at the Python layer; `node.method()` here).

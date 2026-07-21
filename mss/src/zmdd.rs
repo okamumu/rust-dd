@@ -176,6 +176,14 @@ where
         zmdd_count(&dd, self.node, ss, &mut cache)
     }
 
+    /// Graphviz source for this family's diagram. Edge labels are the raw edge indices; for
+    /// a `reverse` (cut) family `extract` reports `edge_num-1 - d`, but the graph is raw.
+    pub fn dot(&self) -> String {
+        let mgr = self.parent.upgrade().unwrap();
+        let dd = mgr.borrow();
+        dd.dot_string(&self.node)
+    }
+
     /// Enumerate the sparse vectors (as `{var: value}`, non-zero components only) whose
     /// terminal label is in `ss`.
     pub fn extract(&self, ss: &HashSet<V>) -> ZmddPath<V> {
