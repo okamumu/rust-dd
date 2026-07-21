@@ -1,3 +1,8 @@
+## relib-mss 0.8.0
+
+- Version bump for workspace lockstep; no functional changes. (`dual`/`mincut`
+  were added to `relib-bss` only; the multi-state dual is deferred.)
+
 ## relib-mss 0.7.0
 
 - **Breaking**: `MddNode::minpath` now returns `Option<MddNode<V>>` (`None` when

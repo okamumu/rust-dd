@@ -141,3 +141,32 @@ fn test_minpath_monotone_detection() {
     assert!(x.and(&y.not()).minpath().is_none(), "x & !y is non-monotone");
     assert!(z.not().minpath().is_none(), "!z is non-monotone");
 }
+
+#[test]
+fn test_dual_and_mincut() {
+    let mut bss = BddMgr::new();
+    let x = bss.defvar("x");
+    let y = bss.defvar("y");
+
+    // Series system phi = x & y: min path = {x,y}; min cut = {x},{y}.
+    let series = x.and(&y);
+    // dual(x & y) == x | y
+    assert!(series.dual().eq(&x.or(&y)), "dual(x&y) must equal x|y");
+    // mincut count: series has 2 minimal cut vectors ({x}, {y}).
+    let cut = series.mincut().expect("x&y is coherent");
+    assert_eq!(cut.bdd_count(&[true]), 2, "series -> 2 min cut vectors");
+    // min path of series: 1 minimal path vector ({x,y}).
+    assert_eq!(series.minpath().unwrap().bdd_count(&[true]), 1);
+
+    // Parallel system phi = x | y: dual is x & y; min cut = {x,y} (1 vector).
+    let parallel = x.or(&y);
+    assert!(parallel.dual().eq(&x.and(&y)), "dual(x|y) must equal x&y");
+    assert_eq!(parallel.mincut().unwrap().bdd_count(&[true]), 1);
+    assert_eq!(parallel.minpath().unwrap().bdd_count(&[true]), 2);
+
+    // dual is an involution: dual(dual(phi)) == phi.
+    assert!(series.dual().dual().eq(&series), "dual is an involution");
+
+    // Non-monotone -> mincut None.
+    assert!(x.xor(&y).mincut().is_none());
+}

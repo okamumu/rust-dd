@@ -2,8 +2,9 @@
 //!
 //! This crate provides an ergonomic, value-style API (`BddMgr` / `BddNode`) on top of
 //! the arena-based BDD engine in `relib-bdd` (`bddcore`). It computes system
-//! probability, path/cut enumeration, minimal
-//! solutions (minimal cut/path sets), k-of-n structures, and solution counting.
+//! probability, path/cut enumeration, minimal **path** vectors (`minpath`) and minimal
+//! **cut** vectors (`mincut`) of a structure function, the dual structure function
+//! (`dual`), k-of-n structures, and solution counting.
 //!
 //! It is the Rust engine behind the BSS/BDD side of the
 //! [`relibmss`](https://github.com/MssReliab/relibmss) Python package. `relibmss` is the
@@ -42,6 +43,7 @@
 
 pub mod bdd_path;
 pub mod bdd_minsol;
+pub mod bdd_dual;
 pub mod bdd_prob;
 pub mod bdd_count;
 pub mod bdd_kofn;
@@ -51,6 +53,7 @@ pub mod prelude {
     pub use bddcore::prelude::*;
     pub use crate::bdd_path::*;
     pub use crate::bdd_minsol::*;
+    pub use crate::bdd_dual::*;
     pub use crate::bdd_prob::*;
     pub use crate::bdd_count::*;
     pub use crate::bss::*;

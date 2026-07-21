@@ -2,6 +2,7 @@ use bddcore::prelude::*;
 use crate::bdd_count;
 use crate::bdd_prob;
 use crate::bdd_minsol;
+use crate::bdd_dual;
 use crate::bdd_kofn;
 use crate::bdd_path::*;
 
@@ -498,14 +499,15 @@ impl BddNode {
         bdd_prob::bmeas(&mut bdd.clone().borrow_mut(), ss, self.node, &pv)
     }
 
-    /// Minimal path/cut vectors (minimal solutions) of a **monotone (coherent)**
-    /// BDD, or `None` if the function is not monotone.
+    /// Minimal **path** vectors of the structure function φ (its prime
+    /// implicants, via the Rauzy minsol), or `None` if φ is not monotone
+    /// (coherent).
     ///
-    /// The Rauzy minsol decomposition is only valid for monotone functions;
-    /// feeding a non-monotone one (e.g. built with `xor`, `!`, or a `<`/`!=`
-    /// comparison) has no meaningful minimal solutions, so `None` is returned.
-    /// Monotonicity is checked inside the recursion and aborts early on the
-    /// first violation.
+    /// A minimal path vector is a minimal set of components whose functioning
+    /// makes the system function. The decomposition is only valid for a
+    /// monotone φ; a non-monotone one (built with `xor`, `!`, or a `<`/`!=`
+    /// comparison) returns `None` (monotonicity is checked in the recursion,
+    /// aborting early). See [`mincut`](Self::mincut) for the dual.
     pub fn minpath(&self) -> Option<BddNode> {
         let bdd = self.parent.upgrade().unwrap();
         let mut cache1 = BddHashMap::default();
@@ -515,6 +517,29 @@ impl BddNode {
             bdd_minsol::minsol(&mut mgr, self.node, &mut cache1, &mut cache2)
         };
         result.map(|r| self.rewrap(&bdd, r))
+    }
+
+    /// The dual structure function `φ^D(x) = ¬φ(¬x)` (swap children + complement
+    /// terminals; monotonicity-preserving). The minimal path vectors of the dual
+    /// are the minimal cut vectors of φ — see [`mincut`](Self::mincut).
+    pub fn dual(&self) -> BddNode {
+        let bdd = self.parent.upgrade().unwrap();
+        let mut cache = BddHashMap::default();
+        let result = {
+            let mut mgr = bdd.borrow_mut();
+            bdd_dual::dual(&mut mgr, self.node, &mut cache)
+        };
+        self.rewrap(&bdd, result)
+    }
+
+    /// Minimal **cut** vectors of the structure function φ, or `None` if φ is not
+    /// monotone (coherent).
+    ///
+    /// A minimal cut vector is a minimal set of components whose failure makes
+    /// the system fail. It is `minpath` of the dual: `mincut(φ) =
+    /// minpath(φ^D)`, and the dual of a monotone φ is monotone.
+    pub fn mincut(&self) -> Option<BddNode> {
+        self.dual().minpath()
     }
 
     pub fn bdd_count(&self, ss: &[bool]) -> u64 {

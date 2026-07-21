@@ -1,3 +1,14 @@
+## relib-bss 0.8.0
+
+- Added `BddNode::dual()` — the dual structure function `φ^D(x) = ¬φ(¬x)`, computed
+  by an O(size) memoized recursion (swap each node's children, complement terminals).
+  It preserves monotonicity.
+- Added `BddNode::mincut() -> Option<BddNode>` — the minimal **cut** vectors of the
+  structure function, defined as `dual().minpath()` (the minimal path vectors of the
+  dual). `None` when the function is not monotone/coherent. `minpath` gives minimal
+  **path** vectors, `mincut` the minimal **cut** vectors; they are dual (series
+  `x&y`: path `{x,y}`, cut `{x},{y}`; parallel `x|y` is the reverse). Additive.
+
 ## relib-bss 0.7.0
 
 - **Breaking**: `BddNode::minpath` now returns `Option<BddNode>` (`None` when the

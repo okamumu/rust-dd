@@ -138,9 +138,14 @@ recursion which is `O(2ⁿ)` (a fixed historical bug). Result is the canonical D
   contributing 0 (ZMDD-flavored).
 - **count / extract** (`bdd_count`/`bdd_path`, `mdd_count`/`mdd_path`) — count satisfying
   assignments, or enumerate paths / minimal cut-path sets as a ZDD/ZMDD.
-- **minpath / minsol** (`bdd_minsol`/`mdd_minsol`) — minimal solutions (Rauzy-style). Note the
-  MDD minsol representation (`Undet` terminal, skip-level = value 0, ZMDD-flavored) differs
-  from MEDDLY's full reduction.
+- **minpath / minsol** (`bdd_minsol`/`mdd_minsol`) — minimal **path** vectors of a structure
+  function `φ` (its prime implicants, Rauzy-style). Returns `Option` (`None` when `φ` is not
+  monotone/coherent). Note the MDD minsol representation (`Undet` terminal, skip-level =
+  value 0, ZMDD-flavored) differs from MEDDLY's full reduction.
+- **dual / mincut** (`bss` only, `bdd_dual`) — `dual` is the dual structure function
+  `φ^D(x) = ¬φ(¬x)` (swap each node's children, complement terminals; O(size), memoized,
+  monotonicity-preserving). `mincut = minpath ∘ dual` gives the minimal **cut** vectors.
+  The multi-state (MDD) dual (state + value reversal) is not yet implemented.
 - **bmeas** (BSS) — per-variable importance measures.
 
 ### 3.6 RPN bridge (`BddMgr::rpn` / `MddMgr::rpn`)
@@ -233,7 +238,7 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | manager lifecycle | `new`, `defvar`, `get_varorder`, `set_gc_threshold`, `live_node_count`, `size`, `gc`, `clear_cache` |
 | build | `zero`, `one`, `create_node`, `rpn`, `and(&[..])`, `or(&[..])`, `kofn(k, &[..])` |
 | node ops | `and`, `or`, `xor`, `not`, `ite`, `eq` |
-| analysis | `prob`, `bmeas`, `minpath`, `bdd_count`/`bdd_extract`, `zdd_count`/`zdd_extract`, `size` |
+| analysis | `prob`, `bmeas`, `minpath`, `dual`, `mincut`, `bdd_count`/`bdd_extract`, `zdd_count`/`zdd_extract`, `size` |
 | introspection | `get_id`, `get_header`, `get_level`, `get_label`, `get_children`, `is_zero/one/undet`, `dot` |
 
 ### MSS — `mss::{MddMgr<V>, MddNode<V>}` (`V: MddValue`, e.g. `i64`)
