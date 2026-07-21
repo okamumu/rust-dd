@@ -61,8 +61,8 @@ where
         }
     }
 
-    fn wrap(&self, node: NodeId) -> ZmddNode<V> {
-        let n = ZmddNode::new(&self.zmdd, &self.gc, node);
+    fn wrap(&self, node: NodeId, reverse: bool) -> ZmddNode<V> {
+        let n = ZmddNode::new(&self.zmdd, &self.gc, node, reverse);
         maybe_gc(&self.zmdd, &self.gc);
         n
     }
@@ -73,9 +73,22 @@ where
         let id = {
             let src = src_rc.borrow();
             let mut dst = self.zmdd.borrow_mut();
-            zmdd_convert::to_zmdd(&src, node, &mut dst)
+            zmdd_convert::to_zmdd(&src, node, &mut dst, false)
         };
-        self.wrap(id)
+        self.wrap(id, false)
+    }
+
+    /// Convert a **maxsol** result (fake-ZMDD, baseline on the top edge) into a genuine ZMDD
+    /// with edges reversed to bottom-baseline "levels below max" (`d`) coordinates. The
+    /// resulting node is flagged `reverse`, so its `extract` reports each recorded component
+    /// as the true state `edge_num-1 - d`. Used by [`MssMgr::mincut`](crate::mss::MssMgr::mincut).
+    pub(crate) fn convert_rev(&self, src_rc: &Rc<RefCell<MtMdd2Manager<V>>>, node: &Node) -> ZmddNode<V> {
+        let id = {
+            let src = src_rc.borrow();
+            let mut dst = self.zmdd.borrow_mut();
+            zmdd_convert::to_zmdd(&src, node, &mut dst, true)
+        };
+        self.wrap(id, true)
     }
 
     pub fn size(&self) -> (usize, usize, usize, usize) {
@@ -88,11 +101,16 @@ where
 }
 
 /// A handle to a set family in a [`ZmddMgr`]'s forest.
+///
+/// `reverse` distinguishes a **cut** family (`mincut`, edges reversed to "levels below max"
+/// coordinates) from a **path** family (`minpath`); it only affects how `extract` reports the
+/// per-component state (`true state = edge_num-1 - d` when reversed).
 #[derive(Debug)]
 pub struct ZmddNode<V> {
     parent: Weak<RefCell<ZmddManager<V>>>,
     gc: Weak<RefCell<GcState>>,
     node: NodeId,
+    reverse: bool,
 }
 
 impl<V> ZmddNode<V>
@@ -103,19 +121,25 @@ where
         parent: Weak<RefCell<ZmddManager<V>>>,
         gc: Weak<RefCell<GcState>>,
         node: NodeId,
+        reverse: bool,
     ) -> Self {
         if let Some(g) = gc.upgrade() {
             *g.borrow_mut().roots.entry(node).or_insert(0) += 1;
         }
-        ZmddNode { parent, gc, node }
+        ZmddNode { parent, gc, node, reverse }
     }
 
-    fn new(zmdd: &Rc<RefCell<ZmddManager<V>>>, gc: &Rc<RefCell<GcState>>, node: NodeId) -> Self {
-        Self::from_weak(Rc::downgrade(zmdd), Rc::downgrade(gc), node)
+    fn new(
+        zmdd: &Rc<RefCell<ZmddManager<V>>>,
+        gc: &Rc<RefCell<GcState>>,
+        node: NodeId,
+        reverse: bool,
+    ) -> Self {
+        Self::from_weak(Rc::downgrade(zmdd), Rc::downgrade(gc), node, reverse)
     }
 
     fn rewrap(&self, zmdd: &Rc<RefCell<ZmddManager<V>>>, node: NodeId) -> Self {
-        let n = ZmddNode::from_weak(self.parent.clone(), self.gc.clone(), node);
+        let n = ZmddNode::from_weak(self.parent.clone(), self.gc.clone(), node, self.reverse);
         if let Some(gc) = self.gc.upgrade() {
             maybe_gc(zmdd, &gc);
         }
@@ -164,7 +188,7 @@ where
     V: MddValue,
 {
     fn clone(&self) -> Self {
-        ZmddNode::from_weak(self.parent.clone(), self.gc.clone(), self.node)
+        ZmddNode::from_weak(self.parent.clone(), self.gc.clone(), self.node, self.reverse)
     }
 }
 
@@ -218,13 +242,16 @@ enum SV {
     Pop(String),
 }
 
-/// Enumerates the sparse vectors of a [`ZmddNode`] family (non-zero components only; the
-/// 0-edge records nothing).
+/// Enumerates the sparse vectors of a [`ZmddNode`] family (non-baseline components only; the
+/// 0-edge records nothing). For a **path** family a recorded edge `i` is the state `i`
+/// (unlisted = 0); for a **cut** family (`reverse`) it is the true state `edge_num-1 - i`
+/// (unlisted = the variable's max state).
 pub struct ZmddPath<V> {
     stack: Vec<SV>,
     path: HashMap<String, usize>,
     node: ZmddNode<V>,
     ss: HashSet<V>,
+    reverse: bool,
 }
 
 impl<V> ZmddPath<V>
@@ -234,11 +261,13 @@ where
     fn new(node: ZmddNode<V>, ss: &HashSet<V>) -> Self {
         let mut stack = Vec::new();
         stack.push(SV::Node(node.get_id()));
+        let reverse = node.reverse;
         ZmddPath {
             stack,
             path: HashMap::new(),
             node,
             ss: ss.clone(),
+            reverse,
         }
     }
 }
@@ -263,13 +292,16 @@ where
                     ZNode::NonTerminal(f) => {
                         let label = dd.borrow().label(&id).unwrap().to_string();
                         let edges: Vec<NodeId> = f.iter().collect();
+                        let last = edges.len() - 1;
                         for (i, e) in edges.into_iter().enumerate().rev() {
                             if i == 0 {
-                                self.stack.push(SV::Node(e)); // 0-edge records nothing
+                                self.stack.push(SV::Node(e)); // 0-edge (baseline) records nothing
                             } else {
+                                // path: state = i; cut (reverse): true state = last - i.
+                                let state = if self.reverse { last - i } else { i };
                                 self.stack.push(SV::Pop(label.clone()));
                                 self.stack.push(SV::Node(e));
-                                self.stack.push(SV::Push(label.clone(), i));
+                                self.stack.push(SV::Push(label.clone(), state));
                             }
                         }
                     }

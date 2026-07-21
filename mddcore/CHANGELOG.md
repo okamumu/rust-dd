@@ -1,3 +1,7 @@
+## relib-mdd 0.12.0
+
+- Version bump for workspace lockstep; no functional changes (the new MSS `mincut` lives in `relib-mss`).
+
 ## relib-mdd 0.11.0
 
 - Version bump for workspace lockstep; no functional changes (the new MSS Birnbaum importance `mss::MddNode::bmeas` lives in `relib-mss`).

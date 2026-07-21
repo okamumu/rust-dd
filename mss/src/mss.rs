@@ -128,4 +128,22 @@ where
         };
         fake.map(|f| self.zmdd.convert(&src_rc, &f))
     }
+
+    /// Minimal **cut** vectors of the structure function `node` as a genuine ZMDD family
+    /// ([`ZmddNode`]), or `None` if the function is not coherent (monotone).
+    ///
+    /// Computed directly by `maxsol` (the top-baseline mirror of `minsol`) — the dual `φ^D`
+    /// is never materialized, avoiding the expensive multi-state edge/value reversal. The
+    /// resulting family is a **cut** ZMDD: its `extract` lists the components pushed *below*
+    /// max (the terminal label is the resulting performance value, in `φ`'s own scale) and
+    /// an unlisted component means that variable stays at its max state.
+    pub fn mincut(&self, node: &MddNode<V>) -> Option<ZmddNode<V>> {
+        let src_rc = node.get_mgr();
+        let tag = node.get_node();
+        let fake = {
+            let mut m = src_rc.borrow_mut();
+            mdd_minsol::maxsol(&mut m, &tag)
+        };
+        fake.map(|f| self.zmdd.convert_rev(&src_rc, &f))
+    }
 }

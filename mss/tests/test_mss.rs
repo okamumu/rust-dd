@@ -2,6 +2,138 @@ use std::collections::HashMap;
 
 use mss::prelude::*;
 
+/// `mincut(φ).extract([v])` must equal the **maximal elements of `{x : φ(x) ≤ v}`**, expressed
+/// sparsely (a component at its max state is unlisted). This is the multi-state minimal cut
+/// vector: the largest-from-top deviations that hold `φ` down to level `v`. Verified by brute
+/// force over all state vectors for the value forest (`max(min(x,y),z)`) and a boolean-forest
+/// structure function; also checks non-coherent → `None`.
+#[test]
+fn test_mincut_matches_bruteforce() {
+    use std::collections::HashSet;
+
+    // Enumerate all assignments over vars, eval φ at each point, and return the mincut oracle:
+    // level v -> set of maximal elements of {x : φ(x) <= v}, as sorted sparse (var != max).
+    fn oracle(
+        node: &mut MddNode<i32>,
+        vars: &[(&str, usize)],
+        maxval: i32,
+    ) -> Vec<Vec<Vec<(String, usize)>>> {
+        // all assignments
+        let mut assigns: Vec<Vec<usize>> = vec![vec![]];
+        for &(_, m) in vars {
+            let mut next = Vec::new();
+            for a in &assigns {
+                for s in 0..m {
+                    let mut b = a.clone();
+                    b.push(s);
+                    next.push(b);
+                }
+            }
+            assigns = next;
+        }
+        // eval φ at each assignment via point-mass prob
+        let mut phi = |a: &[usize]| -> i32 {
+            let pv: std::collections::HashMap<String, Vec<f64>> = vars
+                .iter()
+                .zip(a.iter())
+                .map(|(&(name, m), &s)| {
+                    let mut e = vec![0.0; m];
+                    e[s] = 1.0;
+                    (name.to_string(), e)
+                })
+                .collect();
+            (0..=maxval).find(|&v| node.prob(&pv, &[v]) > 0.5).unwrap()
+        };
+        let phis: Vec<i32> = assigns.iter().map(|a| phi(a)).collect();
+        let geq = |a: &[usize], b: &[usize]| a.iter().zip(b).all(|(x, y)| x >= y);
+        let mut out = Vec::new();
+        for v in 0..=maxval {
+            let below: Vec<&Vec<usize>> = assigns
+                .iter()
+                .zip(phis.iter())
+                .filter(|(_, &p)| p <= v)
+                .map(|(a, _)| a)
+                .collect();
+            // maximal elements of `below`
+            let mut fam: Vec<Vec<(String, usize)>> = Vec::new();
+            for a in &below {
+                let maximal = !below
+                    .iter()
+                    .any(|b| b.as_slice() != a.as_slice() && geq(b, a));
+                if maximal {
+                    let mut sparse: Vec<(String, usize)> = vars
+                        .iter()
+                        .zip(a.iter())
+                        .filter(|(&(_, m), &s)| s != m - 1) // unlisted = max
+                        .map(|(&(name, _), &s)| (name.to_string(), s))
+                        .collect();
+                    sparse.sort();
+                    // the all-max vector (empty deviation) is not a real cut
+                    if !sparse.is_empty() {
+                        fam.push(sparse);
+                    }
+                }
+            }
+            fam.sort();
+            out.push(fam);
+        }
+        out
+    }
+
+    fn got(cut: &ZmddNode<i32>, v: i32) -> Vec<Vec<(String, usize)>> {
+        let ss: HashSet<i32> = [v].into_iter().collect();
+        let mut fam: Vec<Vec<(String, usize)>> = cut
+            .extract(&ss)
+            .map(|d| {
+                let mut e: Vec<(String, usize)> = d.into_iter().collect();
+                e.sort();
+                e
+            })
+            .filter(|e| !e.is_empty()) // the all-max vector is not a real cut
+            .collect();
+        fam.sort();
+        fam
+    }
+
+    // value forest: max(min(x,y), z), K = 3
+    {
+        let mut m: MssMgr<i32> = MssMgr::new();
+        let x = m.defvar("x", 3);
+        let y = m.defvar("y", 3);
+        let z = m.defvar("z", 3);
+        let mut phi = x.min(&y).max(&z);
+        let cut = m.mincut(&phi).expect("coherent");
+        let orc = oracle(&mut phi, &[("x", 3), ("y", 3), ("z", 3)], 2);
+        for v in 0..=2 {
+            assert_eq!(got(&cut, v), orc[v as usize], "value-forest mincut at level {v}");
+        }
+    }
+
+    // boolean forest: [x>=1] & [y>=2]  (Bool-tagged), K = 2 (values 0/1)
+    {
+        let mut m: MssMgr<i32> = MssMgr::new();
+        let x = m.defvar("x", 3);
+        let y = m.defvar("y", 3);
+        let one = m.value(1);
+        let two = m.value(2);
+        let mut phi = x.ge(&one).and(&y.ge(&two));
+        let cut = m.mincut(&phi).expect("coherent");
+        let orc = oracle(&mut phi, &[("x", 3), ("y", 3)], 1);
+        for v in 0..=1 {
+            assert_eq!(got(&cut, v), orc[v as usize], "bool-forest mincut at level {v}");
+        }
+    }
+
+    // non-coherent -> None
+    {
+        let mut m: MssMgr<i32> = MssMgr::new();
+        let x = m.defvar("x", 3);
+        let y = m.defvar("y", 3);
+        let diff = x.sub(&y); // decreases in y
+        assert!(m.mincut(&diff).is_none(), "x - y is not coherent");
+    }
+}
+
 /// `bmeas[x][d]` must equal `P(φ∈ss | x=d+1) − P(φ∈ss | x=d)`, where each conditional is
 /// `prob` computed with `x` pinned to that state (its probability vector replaced by a unit
 /// vector). Verified for every (variable, transition) on both the value forest

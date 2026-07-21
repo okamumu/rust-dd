@@ -142,10 +142,15 @@ recursion which is `O(2ⁿ)` (a fixed historical bug). Result is the canonical D
   function `φ` (its prime implicants, Rauzy-style). Returns `Option` (`None` when `φ` is not
   monotone/coherent). Note the MDD minsol representation (`Undet` terminal, skip-level =
   value 0, ZMDD-flavored) differs from MEDDLY's full reduction.
-- **dual / mincut** (`bss` only, `bdd_dual`) — `dual` is the dual structure function
+- **dual / mincut** (`bss`, `bdd_dual`) — `dual` is the dual structure function
   `φ^D(x) = ¬φ(¬x)` (swap each node's children, complement terminals; O(size), memoized,
   monotonicity-preserving). `mincut = minpath ∘ dual` gives the minimal **cut** vectors.
-  The multi-state (MDD) dual (state + value reversal) is not yet implemented.
+- **mincut** (`mss`, `mdd_minsol::maxsol` + `MssMgr::mincut`) — the multi-state minimal cut
+  vectors, computed **directly** rather than via `minpath ∘ dual`: the MDD dual would need every
+  variable's edges reversed *and* all terminal values remapped (`v→K−1−v`), and the intermediate
+  can blow up. `maxsol` is the exact top-baseline mirror of `minsol` (baseline = top edge; filter
+  via the *higher* cofactor), converted with edges reversed (`to_zmdd(reverse=true)`) into a cut
+  `ZmddNode` (its `extract` lists deviations below max; terminal label = φ's own value).
 - **ZDD set families** (`bss` only, `BssMgr` + `zdd`/`zdd_convert`) — `BssMgr` owns a `BddMgr`
   and a `ZddMgr`; `minpath`/`mincut` compute the minsol in the BDD forest, then convert
   (private `zdd_convert::to_zdd`) into a genuine `ZddManager` and return a `ZddNode`. Set
@@ -274,7 +279,7 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | logic (bool) | `and`, `or`, `xor`, `not`, `ite` |
 | analysis | `prob`, `bmeas` (Birnbaum importance), `mdd_count`/`mdd_extract`, `size` |
 | introspection | `get_id`, `get_id2`, `get_node`, `get_header`, `get_level`, `get_label`, `get_children`, `is_boolean/value/zero/one/undet`, `value`, `dot` |
-| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `size` (`ZmddNode`) |
+| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath`/`mincut` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `size` (`ZmddNode`) |
 
 Two API styles coexist (see `README.md`): an older `Context`-centric style and the current
 node-centric style (`mgr.getbdd(top).prob(...)` at the Python layer; `node.method()` here).

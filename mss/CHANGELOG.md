@@ -1,9 +1,18 @@
-## Unreleased
+## relib-mss 0.12.0
 
-- **Docs**: `bmeas` rustdoc now documents the interval-arithmetic behavior — instantiating the
-  generic `T` with an interval type gives a guaranteed but *conservative* enclosure (dependency
-  problem + worst-case subtraction in the `D_j` difference; `Σ_j p = 1` not enforced). No code
-  change.
+- **New: minimal cut vectors — `MssMgr::mincut`** returns the minimal cut vectors of a coherent
+  structure function as a genuine `ZmddNode` (or `None` if non-coherent). Computed **directly**
+  by a new `maxsol` pass (`mdd_minsol::maxsol`, the top-baseline mirror of `minsol`) — the dual
+  `φ^D` is never materialized, avoiding the expensive multi-state edge/value reversal. The
+  result is a *cut* ZMDD (`ZmddNode` now carries a `reverse` flag): its `extract` lists the
+  components pushed below max ("levels below max" coordinates, undone by the reader), with an
+  unlisted component meaning that variable stays at its max state, and the terminal label is the
+  resulting performance value in φ's own scale (so a boolean fault-tree failure is read with
+  `extract([0])`). `zmdd_convert::to_zmdd` gained a `reverse` parameter (reverses each node's
+  edge order to put the baseline back on edge 0).
+- **Docs**: `bmeas` rustdoc documents its interval-arithmetic behavior — a generic interval `T`
+  gives a guaranteed but *conservative* enclosure (dependency problem + worst-case subtraction in
+  the `D_j` difference; `Σ_j p = 1` not enforced).
 
 ## relib-mss 0.11.0
 
