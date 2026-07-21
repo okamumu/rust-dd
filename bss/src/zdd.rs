@@ -240,6 +240,8 @@ impl ZddNode {
         self.node == other.node
     }
 
+    /// Graphviz source for this family's diagram. The `0` terminal (the empty family) and the
+    /// edges into it are omitted; the 0-edge is still drawn wherever it leads somewhere.
     pub fn dot(&self) -> String {
         let zdd = self.parent.upgrade().unwrap();
         let result = zdd.borrow().dot_string(&self.node);

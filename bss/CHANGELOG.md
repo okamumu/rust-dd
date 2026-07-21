@@ -1,3 +1,7 @@
+## relib-bss 0.13.1
+
+- `ZddNode::dot` follows the `relib-bdd` change: the `0` terminal (the empty family) and the edges into it are omitted.
+
 ## relib-bss 0.13.0
 
 - Version bump for workspace lockstep; no functional changes (the new ZMDD Graphviz output lives in `relib-mdd`/`relib-mss`).

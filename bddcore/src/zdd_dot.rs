@@ -1,3 +1,10 @@
+//! Graphviz rendering for [`ZddManager`].
+//!
+//! The `0` terminal (the empty family) and every edge into it are **omitted** — they carry
+//! no information and clutter the picture. `0` is therefore drawn only when it is the root
+//! itself (so an empty family does not render as an empty graph). The 0-*edge* is still
+//! drawn wherever it leads somewhere: in a ZDD it means "element not in the set".
+
 use common::prelude::*;
 use crate::nodes::*;
 use crate::zdd::*;
@@ -34,9 +41,9 @@ impl Dot for ZddManager {
                 );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, xid) in fnode.iter().enumerate() {
-                    if let Node::Zero | Node::One | Node::NonTerminal(_) =
-                        self.get_node(&xid).unwrap()
-                    {
+                    // The `0` terminal is the empty family: skip the node and the arrow.
+                    // (The 0-*edge* itself is kept — it means "element not in the set".)
+                    if let Node::One | Node::NonTerminal(_) = self.get_node(&xid).unwrap() {
                         self.dot_impl(io, &xid, visited);
                         let s = format!(
                             "\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n",

@@ -1,3 +1,7 @@
+## relib-mss 0.13.1
+
+- `ZmddNode::dot` follows the `relib-mdd` change: the `Undet` terminal (the empty family) and the edges into it are omitted.
+
 ## relib-mss 0.13.0
 
 - **New: `ZmddNode::dot`** — Graphviz source for a minimal path/cut vector family, mirroring `MddNode::dot` (backed by the new `Dot` impl in `relib-mdd`). Edge labels are the raw edge indices; for a `reverse` (cut) family `extract` reports `edge_num-1 - d`, but the diagram is the raw one.

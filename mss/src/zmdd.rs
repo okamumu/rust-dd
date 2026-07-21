@@ -178,6 +178,7 @@ where
 
     /// Graphviz source for this family's diagram. Edge labels are the raw edge indices; for
     /// a `reverse` (cut) family `extract` reports `edge_num-1 - d`, but the graph is raw.
+    /// The `Undet` terminal (the empty family) and the edges into it are omitted.
     pub fn dot(&self) -> String {
         let mgr = self.parent.upgrade().unwrap();
         let dd = mgr.borrow();

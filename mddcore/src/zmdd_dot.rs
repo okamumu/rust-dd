@@ -5,6 +5,10 @@
 //! Edge labels are the raw edge indices; a `reverse` (cut) family in the `mss` layer
 //! reports states as `edge_num-1 - d` when extracting, but the graph shown here is the
 //! raw diagram.
+//!
+//! The `Undet` terminal (the empty family) and every edge into it are **omitted** — they
+//! carry no information and clutter the picture. `Undet` is therefore drawn only when it
+//! is the root itself (so an empty family does not render as an empty graph).
 
 use crate::mtmdd::Node;
 use crate::zmdd::ZmddManager;
@@ -46,14 +50,17 @@ where
                 );
                 io.write_all(s.as_bytes()).unwrap();
                 for (i, xid) in fnode.iter().enumerate() {
-                    self.dot_impl(io, &xid, visited);
-                    let s = format!(
-                        "\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n",
-                        fnode.id(),
-                        xid,
-                        i
-                    );
-                    io.write_all(s.as_bytes()).unwrap();
+                    // Skip the empty family: no node, no arrow.
+                    if let Node::Terminal(_) | Node::NonTerminal(_) = self.get_node(&xid).unwrap() {
+                        self.dot_impl(io, &xid, visited);
+                        let s = format!(
+                            "\"obj{}\" -> \"obj{}\" [label=\"{}\"];\n",
+                            fnode.id(),
+                            xid,
+                            i
+                        );
+                        io.write_all(s.as_bytes()).unwrap();
+                    }
                 }
             }
         };

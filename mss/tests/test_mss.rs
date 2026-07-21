@@ -354,6 +354,8 @@ fn test_zmdd_dot() {
 
     let dot = a.dot();
     assert!(dot.starts_with("digraph {"));
+    // The empty family (Undet) and the edges into it are omitted.
+    assert!(!dot.contains("Undet"), "Undet terminal should not be drawn:\n{dot}");
     assert!(dot.trim_end().ends_with('}'));
     for label in ["x", "y", "z"] {
         assert!(dot.contains(&format!("label=\"{}\"", label)), "missing {}", label);
