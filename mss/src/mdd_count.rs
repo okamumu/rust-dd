@@ -229,109 +229,6 @@ where
     result
 }
 
-pub fn zmdd_count<V, T>(
-    mdd: &MtMdd2Manager<V>,
-    node: &Node,
-    ss: &HashSet<V>,
-) -> T
-where
-    T: Add<Output = T> + Clone + From<u32> + Mul<Output = T>,
-    V: MddValue,
-{
-    match node {
-        Node::Value(fnode) => {
-            let mut cache = BddHashMap::default();
-            vzmdd_count(mdd.mtmdd(), *fnode, ss, &mut cache)
-        }
-        Node::Bool(fnode) => {
-            let mut cache = BddHashMap::default();
-            bzmdd_count(mdd.mdd(), *fnode, ss, &mut cache)
-        }
-    }
-}
-
-fn vzmdd_count<V, T>(
-    mdd: &mtmdd::MtMddManager<V>,
-    node: NodeId,
-    ss: &HashSet<V>,
-    cache: &mut BddHashMap<NodeId, T>,
-) -> T
-where
-    T: Add<Output = T> + Clone + From<u32> + Mul<Output = T>,
-    V: MddValue,
-{
-    let key = node;
-    if let Some(x) = cache.get(&key) {
-        return x.clone();
-    }
-    let result = match mdd.get_node(&node).unwrap() {
-        mtmdd::Node::Terminal(fnode) => {
-            let value = fnode.value();
-            if ss.contains(&value) {
-                T::from(1)
-            } else {
-                T::from(0)
-            }
-        }
-        mtmdd::Node::NonTerminal(fnode) => {
-            let mut result = T::from(0);
-            let fnodeid: Vec<_> = fnode.iter().collect();
-            for x in fnodeid.into_iter() {
-                let tmp = vzmdd_count(mdd, x, ss, cache);
-                result = result + tmp;
-            }
-            result
-        }
-        mtmdd::Node::Undet => T::from(0),
-    };
-    cache.insert(key, result.clone());
-    result
-}
-
-fn bzmdd_count<V, T>(
-    mdd: &mdd::MddManager,
-    node: NodeId,
-    ss: &HashSet<V>,
-    cache: &mut BddHashMap<NodeId, T>,
-) -> T
-where
-    T: Add<Output = T> + Clone + From<u32> + Mul<Output = T>,
-    V: MddValue,
-{
-    let key = node;
-    if let Some(x) = cache.get(&key) {
-        return x.clone();
-    }
-    let result = match mdd.get_node(&node).unwrap() {
-        mdd::Node::Zero => {
-            if ss.contains(&V::from(0)) {
-                T::from(1)
-            } else {
-                T::from(0)
-            }
-        }
-        mdd::Node::One => {
-            if ss.contains(&V::from(1)) {
-                T::from(1)
-            } else {
-                T::from(0)
-            }
-        }
-        mdd::Node::NonTerminal(fnode) => {
-            let mut result = T::from(0);
-            let fnodeid: Vec<_> = fnode.iter().collect();
-            for x in fnodeid.into_iter() {
-                let tmp = bzmdd_count(mdd, x, ss, cache);
-                result = result + tmp;
-            }
-            result
-        }
-        mdd::Node::Undet => T::from(0),
-    };
-    cache.insert(key, result.clone());
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,15 +248,6 @@ mod tests {
         (mgr.mul(tmp, z), mgr)
     }
 
-    #[test]
-    fn test_zmdd_count() {
-        let (node, mut mgr) = create_mdd();
-        let ss = vec![0].into_iter().collect::<HashSet<_>>();
-        println!("{}", mgr.dot_string(&node));
-        let result: u64 = zmdd_count(&mut mgr, &node, &ss);
-        println!("{}", result);
-        assert!(result == 3);
-    }
 
     #[test]
     fn test_mdd_count() {

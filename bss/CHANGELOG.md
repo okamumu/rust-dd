@@ -1,3 +1,7 @@
+## relib-bss 0.10.0
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-bss 0.9.1
 
 - Internal consistency: `bdd_minsol::without` `(One, NonTerminal)` now recurses into the

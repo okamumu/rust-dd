@@ -1,3 +1,25 @@
+## relib-mss 0.10.0
+
+- **New: `ZmddMgr` / `ZmddNode`** — minimal path vector families as genuine ZMDDs, with the
+  label-wise set operations `intersect` / `setdiff`, plus `count` / `extract`. (Only
+  `intersect`/`setdiff` this round — see the crate TODO for the rest.)
+- **New: `MssMgr`** — the multi-state manager, mirroring `bss::BssMgr`. It owns an `MddMgr`
+  (structure functions over MTMDD2) and a `ZmddMgr` (families), and provides the analysis
+  spanning both: **`MssMgr::minpath(&node) -> Option<ZmddNode>`** returns the minimal path
+  vectors as a genuine ZMDD family. Build expressions through the delegated MDD API
+  (`defvar`/`rpn`/`min`/`max`/… or the `MddNode` operators).
+- **Source reorg** (mirrors the `bss` layout `bdd.rs`/`bss.rs`/`zdd.rs`): the MDD wrapper
+  moved from `mss.rs` to **`mdd.rs`** (`MddMgr`/`MddNode`); new **`mss.rs`** holds `MssMgr`;
+  `zmdd.rs` is the ZMDD wrapper. Prelude re-exports unchanged, so `use mss::prelude::*` still
+  works.
+- **Breaking / removed** (superseded by the genuine `ZmddNode`, as on the BSS side):
+  - `minpath` moved off `MddNode` onto `MssMgr` and now returns a genuine `ZmddNode`
+    (was an `MddNode` read with ZMDD semantics via `ZmddMgr::from_minsol`).
+  - Removed the fake-ZMDD readers `MddNode::zmdd_extract` / `MddNode::zmdd_count`,
+    `mdd_path::ZMddPath`, and `mdd_count::{zmdd_count, vzmdd_count, bzmdd_count}`.
+    `MddNode::mdd_extract` / `mdd_count` (full assignments) are retained.
+  - The ZMDD path iterator `ZmddSetPath` was renamed `ZmddPath` (parity with `bss::ZddPath`).
+
 ## relib-mss 0.9.1
 
 - **Bug fix (correctness): `minpath` / `mincut` produced non-minimal path/cut vectors**

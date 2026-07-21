@@ -28,7 +28,7 @@ Dependencies flow strictly upward; lower crates never depend on higher ones.
 | `bddcore/` | `relib-bdd`    | `bddcore` | `BddManager` (BDD), `ZddManager` (ZDD), `_ops`/`_dot`/`_stack` |
 | `mddcore/` | `relib-mdd`    | `mddcore` | `MddManager`, `MtMddManager<V>`, `MtMdd2Manager<V>` |
 | `bss/`     | `relib-bss`    | `bss`     | `bdd` (`BddMgr`/`BddNode`), `bss` (`BssMgr`), `zdd` (`ZddMgr`/`ZddNode`) + `bdd_prob`/`bdd_path`/`bdd_minsol`/`bdd_dual`/`bdd_count`/`bdd_kofn` + `zdd_convert`/`zdd_count`/`zdd_path` |
-| `mss/`     | `relib-mss`    | `mss`     | `MddMgr<V>`/`MddNode<V>` + `mdd_prob`/`mdd_path`/`mdd_minsol`/`mdd_count` |
+| `mss/`     | `relib-mss`    | `mss`     | `mdd` (`MddMgr<V>`/`MddNode<V>`), `mss` (`MssMgr<V>`), `zmdd` (`ZmddMgr<V>`/`ZmddNode<V>`) + `mdd_prob`/`mdd_path`/`mdd_minsol`/`mdd_count` + `zmdd_convert` |
 
 The crates.io **package** name (`relib-*`) differs from the **lib** name so `use` paths stay
 stable. Every crate re-exports through a `prelude` module (`use common::prelude::*`).
@@ -152,8 +152,18 @@ recursion which is `O(2ⁿ)` (a fixed historical bug). Result is the canonical D
   algebra (`union`/`intersect`/`setdiff`/`product`/`divide`) comes from `bddcore::zdd_ops`.
   `ZddMgr` also builds families standalone (`empty`/`base`/`singleton`/`from_sets`, tracking
   element→header like `BddMgr::defvar`); enumeration is `zdd_path::ZddPath`.
-  The `bdd_minsol::without` `(One, NonTerminal)` case must return the operand unchanged —
-  recursing there fabricates non-minimal sets (fixed in 0.9.0; brute-force checked to n=4).
+  The `bdd_minsol::without` `(One, NonTerminal)` case must recurse the reference's zero branch
+  (`without(f, g.edge(0))`) — recursing every branch fabricates non-minimal sets (fixed 0.9.1;
+  the analogous `mss::mdd_minsol::{vwithout,bwithout}` fix uses the same zero-branch recursion).
+- **ZMDD set families** (`mss` + `mddcore::zmdd`) — the multi-state analogue: a
+  `mddcore::ZmddManager` is a zero-suppressed **multi-terminal** MDD denoting `f: R → 2^S`
+  (sparse-vector families stratified by terminal label; `create_node` zero-suppresses on the
+  0-edge, NOT the full-reduction "all edges equal"). `mss::MssMgr::minpath` returns the
+  minimal path vectors directly as a genuine `ZmddNode` (converting the fake-ZMDD in the
+  `MtMdd2Manager` via the private `mss::zmdd_convert`);
+  `mddcore::zmdd_ops` provides `intersect`/`setdiff` (label-wise, partition-preserving — its
+  level-mismatch arm descends the 0-edge, same principle as `bdd_minsol::without`). `union` /
+  arithmetic apply / dominance / threshold / relabel are future work.
 - **bmeas** (BSS) — per-variable importance measures.
 
 ### 3.6 RPN bridge (`BddMgr::rpn` / `MddMgr::rpn`)
@@ -259,8 +269,9 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | arithmetic (value) | `add`, `sub`, `mul`, `div`, `min`, `max` |
 | comparison (value→bool) | `eq`, `ne`, `lt`, `le`, `gt`, `ge` |
 | logic (bool) | `and`, `or`, `xor`, `not`, `ite` |
-| analysis | `prob`, `minpath`, `mdd_count`/`mdd_extract`, `zmdd_count`/`zmdd_extract`, `size` |
+| analysis | `prob`, `mdd_count`/`mdd_extract`, `size` |
 | introspection | `get_id`, `get_id2`, `get_node`, `get_header`, `get_level`, `get_label`, `get_children`, `is_boolean/value/zero/one/undet`, `value`, `dot` |
+| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `size` (`ZmddNode`) |
 
 Two API styles coexist (see `README.md`): an older `Context`-centric style and the current
 node-centric style (`mgr.getbdd(top).prob(...)` at the Python layer; `node.method()` here).

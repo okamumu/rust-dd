@@ -38,17 +38,22 @@
 //! The `mdd_prob` / `mdd_path` / `mdd_minsol` / `mdd_count` modules serve as reference
 //! implementations.
 
+pub mod mdd;
 pub mod mdd_path;
 pub mod mdd_prob;
 pub mod mdd_count;
 pub mod mdd_minsol;
 pub mod mss;
+pub mod zmdd;
+pub(crate) mod zmdd_convert;
 
 pub mod prelude {
     pub use mddcore::prelude::*;
+    pub use crate::mdd::*;
     pub use crate::mdd_path::*;
     pub use crate::mdd_minsol::*;
     pub use crate::mdd_prob::*;
     pub use crate::mdd_count::*;
     pub use crate::mss::*;
+    pub use crate::zmdd::*;
 }

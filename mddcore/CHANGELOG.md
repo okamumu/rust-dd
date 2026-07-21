@@ -1,3 +1,13 @@
+## relib-mdd 0.10.0
+
+- **New: zero-suppressed multi-terminal MDD (`ZmddManager`).** Denotes `f: R → 2^S` — a
+  family of **sparse vectors** stratified by terminal label (each `Terminal(v)` is a label,
+  `Undet` is the empty family, `X=0` = "not in the vector"). Uses a **zero-suppression**
+  `create_node` (returns the 0-edge when every non-0 edge is `Undet`), never the full-reduction
+  "merge if all edges equal". Set operations `intersect` / `setdiff` (`zmdd_ops`) combine
+  label-wise and preserve the disjoint/partition form. (`union` / arithmetic / dominance /
+  threshold / relabel are future work.)
+
 ## relib-mdd 0.9.1
 
 - Version bump for workspace lockstep; no functional changes.

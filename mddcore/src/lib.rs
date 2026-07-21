@@ -42,11 +42,15 @@ pub mod mtmdd2;
 pub mod mtmdd2_ops;
 pub mod mtmdd2_dot;
 
+pub mod zmdd;
+pub mod zmdd_ops;
+
 pub mod prelude {
     pub use common::prelude::*;
     pub use crate::mdd::MddManager;
     pub use crate::mtmdd::MtMddManager;
     pub use crate::mtmdd2::MtMdd2Manager;
+    pub use crate::zmdd::ZmddManager;
     pub use crate::mdd;
     pub use crate::mtmdd;
     pub use crate::mtmdd2::*;

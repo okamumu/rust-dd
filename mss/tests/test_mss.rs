@@ -23,28 +23,28 @@ fn test_mdd_mgr() {
 
 #[test]
 fn test_minpath_coherence_detection() {
-    let mut mgr: MddMgr<i32> = MddMgr::new();
+    let mut mgr: MssMgr<i32> = MssMgr::new();
     let x = mgr.defvar("x", 3);
     let y = mgr.defvar("y", 3);
 
     // Coherent value functions (non-decreasing in every component) -> Some.
-    let mut sum = x.add(&y); // x + y
-    assert!(sum.minpath().is_some(), "x + y is coherent");
-    let mut mx = x.max(&y); // max(x, y)
-    assert!(mx.minpath().is_some(), "max(x,y) is coherent");
+    let sum = x.add(&y); // x + y
+    assert!(mgr.minpath(&sum).is_some(), "x + y is coherent");
+    let mx = x.max(&y); // max(x, y)
+    assert!(mgr.minpath(&mx).is_some(), "max(x,y) is coherent");
 
     // Non-coherent value: x - y decreases in y.
-    let mut diff = x.sub(&y);
-    assert!(diff.minpath().is_none(), "x - y is not coherent");
+    let diff = x.sub(&y);
+    assert!(mgr.minpath(&diff).is_none(), "x - y is not coherent");
 
     // Boolean structure functions via comparison.
     let one = mgr.value(1);
-    let mut ge = x.ge(&one); // [x >= 1] : non-decreasing in x -> coherent
-    assert!(ge.minpath().is_some(), "[x>=1] is coherent");
-    let mut lt = x.lt(&y); // [x < y] : decreasing in x -> not coherent
-    assert!(lt.minpath().is_none(), "[x<y] is not coherent");
-    let mut eq = x.eq(&y); // [x == y] : not monotone
-    assert!(eq.minpath().is_none(), "[x==y] is not coherent");
+    let ge = x.ge(&one); // [x >= 1] : non-decreasing in x -> coherent
+    assert!(mgr.minpath(&ge).is_some(), "[x>=1] is coherent");
+    let lt = x.lt(&y); // [x < y] : decreasing in x -> not coherent
+    assert!(mgr.minpath(&lt).is_none(), "[x<y] is not coherent");
+    let eq = x.eq(&y); // [x == y] : not monotone
+    assert!(mgr.minpath(&eq).is_none(), "[x==y] is not coherent");
 }
 
 /// Regression for the minsol non-minimal bug (the `without` (NonTerminal, Terminal)
@@ -55,17 +55,17 @@ fn test_minpath_coherence_detection() {
 #[test]
 fn test_minpath_no_spurious_vectors() {
     use std::collections::HashSet;
-    let mut mgr: MddMgr<i32> = MddMgr::new();
+    let mut mgr: MssMgr<i32> = MssMgr::new();
     let x = mgr.defvar("x", 3);
     let y = mgr.defvar("y", 3);
     let z = mgr.defvar("z", 3);
 
-    let mut phi = x.min(&y).max(&z); // max(min(x,y), z)
-    let mp = phi.minpath().expect("max(min(x,y),z) is coherent");
+    let phi = x.min(&y).max(&z); // max(min(x,y), z)
+    let mp = mgr.minpath(&phi).expect("max(min(x,y),z) is coherent");
 
     let ss: HashSet<i32> = [1, 2].into_iter().collect();
     let mut got: Vec<Vec<(String, usize)>> = mp
-        .zmdd_extract(&ss)
+        .extract(&ss)
         .map(|d| {
             let mut v: Vec<(String, usize)> =
                 d.into_iter().filter(|(_, val)| *val != 0).collect();
@@ -90,4 +90,57 @@ fn test_minpath_no_spurious_vectors() {
     expected.sort();
 
     assert_eq!(got, expected, "minpath must be exactly the 4 minimal path vectors");
+}
+
+#[test]
+fn test_zmdd_intersect_setdiff() {
+    use std::collections::HashSet;
+
+    fn sorted_vecs(z: &ZmddNode<i32>, ss: &HashSet<i32>) -> Vec<Vec<(String, usize)>> {
+        let mut v: Vec<Vec<(String, usize)>> = z
+            .extract(ss)
+            .map(|d| {
+                let mut e: Vec<(String, usize)> = d.into_iter().collect();
+                e.sort();
+                e
+            })
+            .collect();
+        v.sort();
+        v
+    }
+    fn set(items: &[(&str, usize)]) -> Vec<(String, usize)> {
+        let mut v: Vec<(String, usize)> = items.iter().map(|(s, n)| (s.to_string(), *n)).collect();
+        v.sort();
+        v
+    }
+
+    let mut mgr: MssMgr<i32> = MssMgr::new();
+    let x = mgr.defvar("x", 3);
+    let y = mgr.defvar("y", 3);
+    let z = mgr.defvar("z", 3);
+
+    // f = max(min(x,y), z): MPV {z=1},{z=2},{x=1,y=1},{x=2,y=2}
+    let f = x.min(&y).max(&z);
+    // g = min(x,y): MPV {x=1,y=1},{x=2,y=2}
+    let g = x.min(&y);
+    let a = mgr.minpath(&f).expect("coherent");
+    let b = mgr.minpath(&g).expect("coherent");
+
+    let ss: HashSet<i32> = [1, 2].into_iter().collect();
+
+    // intersect (label-wise): {x=1,y=1},{x=2,y=2}
+    let inter = a.intersect(&b);
+    assert_eq!(
+        sorted_vecs(&inter, &ss),
+        vec![set(&[("x", 1), ("y", 1)]), set(&[("x", 2), ("y", 2)])]
+    );
+    assert_eq!(inter.count(&ss), 2);
+
+    // setdiff a - b (label-wise): {z=1},{z=2}
+    let diff = a.setdiff(&b);
+    assert_eq!(
+        sorted_vecs(&diff, &ss),
+        vec![set(&[("z", 1)]), set(&[("z", 2)])]
+    );
+    assert_eq!(diff.count(&ss), 2);
 }

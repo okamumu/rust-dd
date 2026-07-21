@@ -1,5 +1,5 @@
 use mddcore::prelude::*;
-use crate::mss::MddNode;
+use crate::mdd::MddNode;
 use std::collections::{HashMap, HashSet};
 
 enum MddStackValue {
@@ -187,141 +187,11 @@ where
         None
     }
 }
-
-enum ZMddStackValue {
-    Node(NodeId),
-    Push(String, usize),
-    Pop(String),
-}
-
-pub struct ZMddPath<V> {
-    next_stack: Vec<ZMddStackValue>,
-    path: HashMap<String,usize>,
-    node: MddNode<V>,
-    ss: HashSet<V>,
-}
-
-impl<V> ZMddPath<V>
-where
-    V: MddValue,
-{
-    pub fn new(node: &MddNode<V>, ss: &HashSet<V>) -> Self {
-        let mut next_stack = Vec::new();
-        next_stack.push(ZMddStackValue::Node(node.get_id()));
-        ZMddPath {
-            next_stack,
-            path: HashMap::new(),
-            node: node.clone(),
-            ss: ss.clone(),
-        }
-    }
-
-    pub fn len(&self) -> u64 {
-        self.node.zmdd_count(&self.ss)
-    }
-}
-
-impl<V> Iterator for ZMddPath<V>
-where
-    V: MddValue,
-{
-    type Item = HashMap<String,usize>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.node.get_node() {
-            Node::Value(_fnode) => {
-                self.vnext()
-            }
-            Node::Bool(_fnode) => {
-                self.bnext()
-            }
-        }
-    }
-}
-
-impl<V> ZMddPath<V>
-where
-    V: MddValue,
-{
-    fn vnext(&mut self) -> Option<HashMap<String,usize>> {
-        let dd = self.node.get_mgr();
-        while let Some(stackvalue) = self.next_stack.pop() {
-            match stackvalue {
-                ZMddStackValue::Node(node) => match dd.borrow().mtmdd().get_node(&node).unwrap() {
-                    mtmdd::Node::Terminal(fnode) => {
-                        let value = fnode.value();
-                        if self.ss.contains(&value) {
-                            let result = self.path.clone();
-                            return Some(result);
-                        }
-                    }
-                    mtmdd::Node::NonTerminal(fnode) => {
-                        let label = dd.borrow().mtmdd().label(&node).unwrap().to_string();
-                        let fnodeid: Vec<_> = fnode.iter().collect();
-                        for (i, x) in fnodeid.into_iter().enumerate().rev() {
-                            self.next_stack.push(ZMddStackValue::Pop(label.to_string()));
-                            self.next_stack.push(ZMddStackValue::Node(x));
-                            self.next_stack.push(ZMddStackValue::Push(label.to_string(), i))
-                        }
-                    }
-                    mtmdd::Node::Undet => (),
-                },
-                ZMddStackValue::Push(x, i) => {
-                    self.path.insert(x, i);
-                }
-                ZMddStackValue::Pop(x) => {
-                    self.path.remove(&x);
-                }
-            }
-        }
-        None
-    }
-
-    fn bnext(&mut self) -> Option<HashMap<String,usize>> {
-        let dd = self.node.get_mgr();
-        while let Some(stackvalue) = self.next_stack.pop() {
-            match stackvalue {
-                ZMddStackValue::Node(node) => match dd.borrow().mdd().get_node(&node).unwrap() {
-                    mdd::Node::Zero => {
-                        if self.ss.contains(&V::from(0)) {
-                            let result = self.path.clone();
-                            return Some(result);
-                        }
-                    }
-                    mdd::Node::One => {
-                        if self.ss.contains(&V::from(1)) {
-                            let result = self.path.clone();
-                            return Some(result);
-                        }
-                    }
-                    mdd::Node::NonTerminal(fnode) => {
-                        let label = dd.borrow().mdd().label(&node).unwrap().to_string();
-                        let fnodeid: Vec<_> = fnode.iter().collect();
-                        for (i, x) in fnodeid.into_iter().enumerate().rev() {
-                            self.next_stack.push(ZMddStackValue::Pop(label.to_string()));
-                            self.next_stack.push(ZMddStackValue::Node(x));
-                            self.next_stack.push(ZMddStackValue::Push(label.to_string(), i))
-                        }
-                    }
-                    mdd::Node::Undet => (),
-                },
-                ZMddStackValue::Push(x, i) => {
-                    self.path.insert(x, i);
-                }
-                ZMddStackValue::Pop(x) => {
-                    self.path.remove(&x);
-                }
-            }
-        }
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mss::MddMgr;
-    use crate::mss::MddNode;
+    use crate::mdd::MddMgr;
+    use crate::mdd::MddNode;
 
     fn create_mdd() -> (MddNode<i32>, MddMgr<i32>) {
         let mut mgr = MddMgr::new();
@@ -333,29 +203,7 @@ mod tests {
         (tmp, mgr)
     }
 
-    #[test]
-    fn test_zmdd_count() {
-        let (node, mgr) = create_mdd();
-        println!("{}", node.dot());
-        let ss = vec![0].into_iter().collect::<HashSet<_>>();
-        let path = ZMddPath::new(&node, &ss);
-        for p in path {
-            println!("{:?}", p);
-        }
-    }
 
-    #[test]
-    fn test_zmdd_count2() {
-        let (node, mgr) = create_mdd();
-        let v = mgr.value(1);
-        let node = node.eq(&v);
-        println!("{}", node.dot());
-        let ss = vec![0].into_iter().collect::<HashSet<_>>();
-        let path = ZMddPath::new(&node, &ss);
-        for p in path {
-            println!("{:?}", p);
-        }
-    }
 
     #[test]
     fn test_mdd_count() {
