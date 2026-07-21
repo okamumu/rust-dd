@@ -1,3 +1,7 @@
+## relib-bdd 0.9.1
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-bdd 0.9.0
 
 - Version bump for workspace lockstep; no functional changes.

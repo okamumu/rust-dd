@@ -1,3 +1,15 @@
+## relib-mss 0.9.1
+
+- **Bug fix (correctness): `minpath` / `mincut` produced non-minimal path/cut vectors**
+  for structure functions involving subsumption (e.g. `max(min(x,y), z)` gained a spurious
+  `(y=1,z=2)`; the boolean `x&y|z` gained `{y,z}`). Conjunctive shapes (`min`) were
+  unaffected. Root cause: `mdd_minsol::{vwithout,bwithout}` expanded every branch of the
+  reference cofactor when the minsol family was a terminal, fabricating vectors with
+  positive components that should be 0. Fixed to recurse into the reference's **zero
+  branch** only (same principle as the existing `level(f) > level(g)` arm). Verified
+  exhaustively against brute-force minimal path vectors for all monotone functions of
+  n=3/K=2 and n=2/K=3.
+
 ## relib-mss 0.9.0
 
 - Version bump for workspace lockstep; no functional changes. (`relib-mss`: the multi-state minsol/minpath is unchanged; the ZDD set-family work landed in `relib-bss` only.)

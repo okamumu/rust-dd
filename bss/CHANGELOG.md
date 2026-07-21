@@ -1,3 +1,10 @@
+## relib-bss 0.9.1
+
+- Internal consistency: `bdd_minsol::without` `(One, NonTerminal)` now recurses into the
+  reference's zero branch (`without(f, g.edge(0))`) instead of the `=> f` shortcut, matching
+  the existing `level(f) < level(g)` arm and the `relib-mss` fix. Behaviorally identical
+  (a non-constant monotone `g` has `g(∅)=0`); the exhaustive n≤4 minpath test still passes.
+
 ## relib-bss 0.9.0
 
 - **Bug fix (correctness): `minpath`/`mincut` produced non-minimal sets for some

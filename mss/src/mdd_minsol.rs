@@ -109,14 +109,13 @@ where
                 g
             }
         }
+        // g (the minsol family) is a terminal, so the candidate vector has all
+        // remaining variables at 0 — only f's zero branch is relevant. Expanding
+        // every branch of f (the previous behavior) fabricated non-minimal vectors
+        // with positive components (e.g. minpath(Max(X,Y)) gained (X=1,Y=2)). Same
+        // principle as the `level(f) > level(g)` arm below.
         (mtmdd::Node::NonTerminal(fnode), mtmdd::Node::Terminal(_)) => {
-            let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().collect();
-            let tmp: Vec<_> = fnodeid
-                .into_iter()
-                .map(|x| vwithout(mdd, x, g, cache))
-                .collect();
-            mdd.create_node(headerid, &tmp)
+            vwithout(mdd, fnode.edge(0), g, cache)
         }
         (mtmdd::Node::Terminal(_), mtmdd::Node::NonTerminal(gnode)) => {
             let headerid = gnode.headerid();
@@ -230,14 +229,12 @@ fn bwithout(
         (mdd::Node::Zero, _) => g,
         (_, mdd::Node::Zero) => mdd.undet(), // probably this case is inpossible
         (mdd::Node::One, _) => mdd.undet(),
+        // g (the minsol family) is the {∅} terminal, so the candidate vector has
+        // all remaining variables at 0 — only f's zero branch matters. Expanding
+        // every branch of f fabricated non-minimal vectors (e.g. minpath(x&y|z)
+        // gained {y,z}). Same principle as the `level(f) > level(g)` arm below.
         (mdd::Node::NonTerminal(fnode), mdd::Node::One) => {
-            let headerid = fnode.headerid();
-            let fnodeid: Vec<_> = fnode.iter().collect();
-            let tmp: Vec<_> = fnodeid
-                .into_iter()
-                .map(|x| bwithout(mdd, x, g, cache))
-                .collect();
-            mdd.create_node(headerid, &tmp)
+            bwithout(mdd, fnode.edge(0), g, cache)
         }
         (mdd::Node::NonTerminal(fnode), mdd::Node::NonTerminal(_gnode))
             if mdd.level(&f) > mdd.level(&g) =>

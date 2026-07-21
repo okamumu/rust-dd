@@ -200,12 +200,14 @@ fn without(
         (Node::Zero, _) => dd.zero(),
         (_, Node::Zero) => f,
         (_, Node::One) => dd.zero(),
-        // f = One is the family {∅}. `without(f, g)` keeps the sets of f that do
-        // not satisfy g. For a non-terminal (hence non-constant) monotone g,
-        // g(∅) = 0, so {∅} is kept unchanged — return One. Recursing over g's
-        // structure here (the previous behavior) fabricated spurious non-minimal
-        // sets (e.g. it made minpath(x&y|z) include {y,z}).
-        (Node::One, Node::NonTerminal(_gnode)) => f,
+        // f = One is the family {∅}, so the only candidate has every remaining
+        // variable absent — only g's zero branch is relevant. Recurse into it
+        // (same principle as the `level(f) < level(g)` arm below), rather than
+        // expanding all of g's branches, which fabricated spurious non-minimal
+        // sets (e.g. it made minpath(x&y|z) include {y,z}). Behaviorally this
+        // equals returning `f`: a non-constant monotone g has g(∅)=0, so the
+        // zero path bottoms out at `(One, Zero) => f`.
+        (Node::One, Node::NonTerminal(gnode)) => without(dd, f, gnode.edge(0), cache),
         (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => {
             dd.zero()
         }
