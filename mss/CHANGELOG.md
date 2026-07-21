@@ -1,3 +1,10 @@
+## Unreleased
+
+- **Docs**: `bmeas` rustdoc now documents the interval-arithmetic behavior — instantiating the
+  generic `T` with an interval type gives a guaranteed but *conservative* enclosure (dependency
+  problem + worst-case subtraction in the `D_j` difference; `Σ_j p = 1` not enforced). No code
+  change.
+
 ## relib-mss 0.11.0
 
 - **New: multi-state Birnbaum importance — `MddNode::bmeas`** (`mdd_prob::bmeas`). Returns,

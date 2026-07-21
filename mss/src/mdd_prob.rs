@@ -132,6 +132,17 @@ where
 /// One topological pass propagates the adjoint weight `w_f` (the probability of reaching node
 /// `f`) down the diagram (`w_root = 1`, `w_{edge_j} += w_f · p_{i,j}`) and accumulates
 /// `D_{i,j} += w_f · (prob(edge_j) − prob(edge_{j-1}))` at each node labeled `i`.
+///
+/// # Interval arithmetic
+///
+/// Instantiating `T` with an interval type (as `relibmss`'s `bmeas_interval` does) evaluates
+/// this same formula with interval arithmetic, yielding a **guaranteed but conservative
+/// enclosure** of each `D_{i,j}`: it contains the true importance for every point probability
+/// within the input boxes (a degenerate box reproduces the `f64` result), but it is not the
+/// tightest enclosure. The dependency problem — a variable's probability recurs, and the
+/// `prob(edge_j) − prob(edge_{j-1})` difference is a worst-case interval subtraction — widens
+/// the bounds, so the interval can straddle zero even when the true value has a definite sign.
+/// The constraint `Σ_j p_{i,j} = 1` is not enforced (per-state bounds are independent).
 pub fn bmeas<V, T>(
     mdd: &mut MtMdd2Manager<V>,
     node: &Node,

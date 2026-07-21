@@ -904,6 +904,10 @@ where
     /// For a binary variable this is the single classic Birnbaum measure
     /// `P(φ∈ss | var=1) − P(φ∈ss | var=0)`. Computed in one backward-differentiation pass
     /// (see [`crate::mdd_prob::bmeas`]).
+    ///
+    /// With an interval type `T` (imprecise probabilities) the result is a *guaranteed but
+    /// conservative* enclosure — see [`crate::mdd_prob::bmeas`] for the caveats (dependency
+    /// problem, worst-case difference subtraction, `Σ_j p = 1` not enforced).
     pub fn bmeas<T>(&mut self, pv: &HashMap<String, Vec<T>>, ss: &[V]) -> HashMap<String, Vec<T>>
     where
         T: Add<Output = T>
