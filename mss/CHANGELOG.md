@@ -1,3 +1,10 @@
+## relib-mss 0.7.0
+
+- **Breaking**: `MddNode::minpath` now returns `Option<MddNode<V>>` (`None` when
+  the structure function is not coherent). `minpath_checked` and the panicking
+  behavior are removed — a single `minpath()` returns the minimal path/cut
+  vectors or `None`.
+
 ## relib-mss 0.6.0
 
 - Coherence-checked `minpath`. `MddNode::minpath_checked() -> Option<MddNode<V>>`

@@ -1,3 +1,10 @@
+## relib-bss 0.7.0
+
+- **Breaking**: `BddNode::minpath` now returns `Option<BddNode>` (`None` when the
+  function is not monotone/coherent). The separate `minpath_checked` and the
+  panicking behavior are removed — a single `minpath()` returns the minimal
+  path/cut sets or `None`. `bdd_minsol::minsol` is unchanged (already `Option`).
+
 ## relib-bss 0.6.0
 
 - Coherence-checked `minpath`. `BddNode::minpath_checked() -> Option<BddNode>`
