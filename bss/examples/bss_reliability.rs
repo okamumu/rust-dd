@@ -30,6 +30,7 @@ fn main() {
     println!("Birnbaum importance = {importance:?}");
 
     // Number of minimal path sets.
-    let minpaths = f.minpath();
+    // minpath returns None for a non-monotone function; (x AND y) OR z is monotone.
+    let minpaths = f.minpath().expect("a coherent (monotone) function");
     println!("number of minimal path sets = {}", minpaths.bdd_count(&[true]));
 }

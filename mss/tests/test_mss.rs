@@ -29,22 +29,20 @@ fn test_minpath_coherence_detection() {
 
     // Coherent value functions (non-decreasing in every component) -> Some.
     let mut sum = x.add(&y); // x + y
-    assert!(sum.minpath_checked().is_some(), "x + y is coherent");
+    assert!(sum.minpath().is_some(), "x + y is coherent");
     let mut mx = x.max(&y); // max(x, y)
-    assert!(mx.minpath_checked().is_some(), "max(x,y) is coherent");
-    // minpath() must not panic and must agree with the checked variant.
-    assert_eq!(sum.minpath().size(), sum.minpath_checked().unwrap().size());
+    assert!(mx.minpath().is_some(), "max(x,y) is coherent");
 
     // Non-coherent value: x - y decreases in y.
     let mut diff = x.sub(&y);
-    assert!(diff.minpath_checked().is_none(), "x - y is not coherent");
+    assert!(diff.minpath().is_none(), "x - y is not coherent");
 
     // Boolean structure functions via comparison.
     let one = mgr.value(1);
     let mut ge = x.ge(&one); // [x >= 1] : non-decreasing in x -> coherent
-    assert!(ge.minpath_checked().is_some(), "[x>=1] is coherent");
+    assert!(ge.minpath().is_some(), "[x>=1] is coherent");
     let mut lt = x.lt(&y); // [x < y] : decreasing in x -> not coherent
-    assert!(lt.minpath_checked().is_none(), "[x<y] is not coherent");
+    assert!(lt.minpath().is_none(), "[x<y] is not coherent");
     let mut eq = x.eq(&y); // [x == y] : not monotone
-    assert!(eq.minpath_checked().is_none(), "[x==y] is not coherent");
+    assert!(eq.minpath().is_none(), "[x==y] is not coherent");
 }

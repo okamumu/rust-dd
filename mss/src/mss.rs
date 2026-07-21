@@ -905,21 +905,15 @@ where
     /// minsol decomposition; it is checked inside the recursion via the local
     /// invariant "the cofactors of every node ascend pointwise"
     /// (`min(c_{i-1}, c_i) == c_{i-1}` on the value forest, `and(..) == c_{i-1}`
-    /// on the bool forest), aborting early on the first violation.
-    pub fn minpath_checked(&mut self) -> Option<MddNode<V>> {
+    /// on the bool forest), aborting early on the first violation. Returns `None`
+    /// for a non-coherent input.
+    pub fn minpath(&mut self) -> Option<MddNode<V>> {
         let mgr = self.parent.upgrade().unwrap();
         let node = {
             let mut mdd = mgr.borrow_mut();
             mdd_minsol::minsol(&mut mdd, &self.node)
         };
         node.map(|n| self.rewrap(&mgr, n))
-    }
-
-    /// Minimal path vectors of a coherent structure function. Panics if the
-    /// function is not coherent — use [`minpath_checked`](Self::minpath_checked).
-    pub fn minpath(&mut self) -> MddNode<V> {
-        self.minpath_checked()
-            .expect("minpath requires a monotone (coherent) function")
     }
 
     pub fn mdd_count(&self, ss: &HashSet<V>) -> u64 {
