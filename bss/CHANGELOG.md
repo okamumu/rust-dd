@@ -1,3 +1,33 @@
+## relib-bss 0.9.0
+
+- **Bug fix (correctness): `minpath`/`mincut` produced non-minimal sets for some
+  monotone functions.** The `bdd_minsol::without` operation, in the `(One, NonTerminal)`
+  case, recursed over the operand and fabricated spurious supersets — e.g.
+  `minpath(x&y | z)` returned `{x,y}, {y,z}, {z}` instead of the correct `{x,y}, {z}`.
+  Simple gates (`x&y`, `x|y`, `kofn`) were unaffected, which is why it went unnoticed.
+  Fixed to return the `{∅}` family unchanged (a non-constant monotone `g` has `g(∅)=0`).
+  Verified exhaustively against brute force for **every** boolean function of n ≤ 4
+  variables.
+- **New: ZDD set-family algebra over minimal path/cut vectors.** Added `BssMgr`, which
+  owns a `BddMgr` (boolean structure functions) and a `ZddMgr` (set families).
+  `minpath`/`mincut` now live on `BssMgr` and return a genuine **`ZddNode`** set family
+  (previously a `BddNode` read with ZDD semantics), supporting `union`/`intersect`/
+  `setdiff`/`product`/`divide`, plus `count`/`extract`/`dot`/`size`. The internal
+  fake-ZDD → ZDD conversion is private.
+- **Breaking**: `BddNode::minpath` / `BddNode::mincut` are removed; use
+  `BssMgr::minpath(&node)` / `mincut(&node)` (returning `Option<ZddNode>`). `BddNode::dual`
+  is unchanged (it is a pure BDD operation).
+- **Breaking**: the fake-ZDD readers `BddNode::zdd_count` / `BddNode::zdd_extract` (and the
+  internal `bdd_path::ZddPath` / `bdd_count::zdd_count`) are removed — they only made sense
+  for the old `BddNode`-backed minsol result, now superseded by the genuine `ZddNode`.
+- Source reorg: the BDD wrapper is now `bss::bdd` (`BddMgr`/`BddNode`), the manager is
+  `bss::bss` (`BssMgr`), and the ZDD wrapper is `bss::zdd` — all still re-exported from the
+  crate prelude, so `use bss::prelude::*` is unaffected.
+- `ZddMgr` can now build set families standalone: `empty()` (`∅`), `base()` (`{∅}`),
+  `singleton(label)` (`{{label}}`), and `from_sets(&[Vec<String>])`, in addition to being the
+  forest behind `minpath`/`mincut`. The set-enumeration iterator was renamed
+  `ZddSetPath` → **`ZddPath`** (matching `bdd_path::BddPath`).
+
 ## relib-bss 0.8.0
 
 - Added `BddNode::dual()` — the dual structure function `φ^D(x) = ¬φ(¬x)`, computed

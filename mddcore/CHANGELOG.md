@@ -1,3 +1,7 @@
+## relib-mdd 0.9.0
+
+- Version bump for workspace lockstep; no functional changes.
+
 ## relib-mdd 0.8.0
 
 - Version bump for workspace lockstep; no functional changes.

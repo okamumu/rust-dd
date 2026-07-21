@@ -9,7 +9,7 @@ use bss::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    let mut mgr = BddMgr::new();
+    let mut mgr = BssMgr::new();
     let x = mgr.defvar("x");
     let y = mgr.defvar("y");
     let z = mgr.defvar("z");
@@ -29,8 +29,8 @@ fn main() {
     let importance = f.bmeas(&pv, &[true]);
     println!("Birnbaum importance = {importance:?}");
 
-    // Number of minimal path sets.
+    // Minimal path vectors, as a genuine ZDD set family.
     // minpath returns None for a non-monotone function; (x AND y) OR z is monotone.
-    let minpaths = f.minpath().expect("a coherent (monotone) function");
-    println!("number of minimal path sets = {}", minpaths.bdd_count(&[true]));
+    let minpaths = mgr.minpath(&f).expect("a coherent (monotone) function");
+    println!("number of minimal path sets = {}", minpaths.count(&[true]));
 }

@@ -27,7 +27,7 @@ Dependencies flow strictly upward; lower crates never depend on higher ones.
 | `common/`  | `relib-common` | `common`  | type aliases, hashmap aliases, core traits, `ComputeCache` |
 | `bddcore/` | `relib-bdd`    | `bddcore` | `BddManager` (BDD), `ZddManager` (ZDD), `_ops`/`_dot`/`_stack` |
 | `mddcore/` | `relib-mdd`    | `mddcore` | `MddManager`, `MtMddManager<V>`, `MtMdd2Manager<V>` |
-| `bss/`     | `relib-bss`    | `bss`     | `BddMgr`/`BddNode` + `bdd_prob`/`bdd_path`/`bdd_minsol`/`bdd_count`/`bdd_kofn` |
+| `bss/`     | `relib-bss`    | `bss`     | `bdd` (`BddMgr`/`BddNode`), `bss` (`BssMgr`), `zdd` (`ZddMgr`/`ZddNode`) + `bdd_prob`/`bdd_path`/`bdd_minsol`/`bdd_dual`/`bdd_count`/`bdd_kofn` + `zdd_convert`/`zdd_count`/`zdd_path` |
 | `mss/`     | `relib-mss`    | `mss`     | `MddMgr<V>`/`MddNode<V>` + `mdd_prob`/`mdd_path`/`mdd_minsol`/`mdd_count` |
 
 The crates.io **package** name (`relib-*`) differs from the **lib** name so `use` paths stay
@@ -146,6 +146,14 @@ recursion which is `O(2ⁿ)` (a fixed historical bug). Result is the canonical D
   `φ^D(x) = ¬φ(¬x)` (swap each node's children, complement terminals; O(size), memoized,
   monotonicity-preserving). `mincut = minpath ∘ dual` gives the minimal **cut** vectors.
   The multi-state (MDD) dual (state + value reversal) is not yet implemented.
+- **ZDD set families** (`bss` only, `BssMgr` + `zdd`/`zdd_convert`) — `BssMgr` owns a `BddMgr`
+  and a `ZddMgr`; `minpath`/`mincut` compute the minsol in the BDD forest, then convert
+  (private `zdd_convert::to_zdd`) into a genuine `ZddManager` and return a `ZddNode`. Set
+  algebra (`union`/`intersect`/`setdiff`/`product`/`divide`) comes from `bddcore::zdd_ops`.
+  `ZddMgr` also builds families standalone (`empty`/`base`/`singleton`/`from_sets`, tracking
+  element→header like `BddMgr::defvar`); enumeration is `zdd_path::ZddPath`.
+  The `bdd_minsol::without` `(One, NonTerminal)` case must return the operand unchanged —
+  recursing there fabricates non-minimal sets (fixed in 0.9.0; brute-force checked to n=4).
 - **bmeas** (BSS) — per-variable importance measures.
 
 ### 3.6 RPN bridge (`BddMgr::rpn` / `MddMgr::rpn`)
@@ -238,8 +246,9 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | manager lifecycle | `new`, `defvar`, `get_varorder`, `set_gc_threshold`, `live_node_count`, `size`, `gc`, `clear_cache` |
 | build | `zero`, `one`, `create_node`, `rpn`, `and(&[..])`, `or(&[..])`, `kofn(k, &[..])` |
 | node ops | `and`, `or`, `xor`, `not`, `ite`, `eq` |
-| analysis | `prob`, `bmeas`, `minpath`, `dual`, `mincut`, `bdd_count`/`bdd_extract`, `zdd_count`/`zdd_extract`, `size` |
+| analysis | `prob`, `bmeas`, `dual` (BddNode); `minpath`/`mincut` on `BssMgr` (→ `ZddNode`); `bdd_count`/`bdd_extract`, `size` |
 | introspection | `get_id`, `get_header`, `get_level`, `get_label`, `get_children`, `is_zero/one/undet`, `dot` |
+| ZDD set family (`BssMgr` owns `BddMgr`+`ZddMgr`; `ZddNode`) | `minpath`/`mincut` (`BssMgr`); `union`, `intersect`, `setdiff`, `product`, `divide`, `count`, `extract`, `dot`, `size` (`ZddNode`) |
 
 ### MSS — `mss::{MddMgr<V>, MddNode<V>}` (`V: MddValue`, e.g. `i64`)
 

@@ -2,9 +2,11 @@
 //!
 //! This crate provides an ergonomic, value-style API (`BddMgr` / `BddNode`) on top of
 //! the arena-based BDD engine in `relib-bdd` (`bddcore`). It computes system
-//! probability, path/cut enumeration, minimal **path** vectors (`minpath`) and minimal
-//! **cut** vectors (`mincut`) of a structure function, the dual structure function
-//! (`dual`), k-of-n structures, and solution counting.
+//! probability, path/cut enumeration, k-of-n structures, solution counting, and the dual
+//! structure function (`dual`). The minimal **path** vectors (`minpath`) and minimal
+//! **cut** vectors (`mincut`) are returned as genuine ZDD set families via `BssMgr`, which
+//! owns both a `BddMgr` and a `ZddMgr` and supports set algebra
+//! (`union`/`intersect`/`setdiff`/`product`/`divide`) over them.
 //!
 //! It is the Rust engine behind the BSS/BDD side of the
 //! [`relibmss`](https://github.com/MssReliab/relibmss) Python package. `relibmss` is the
@@ -41,6 +43,7 @@
 //! The `bdd_prob` / `bdd_path` / `bdd_minsol` / `bdd_count` / `bdd_kofn` modules serve as
 //! reference implementations.
 
+pub mod bdd;
 pub mod bdd_path;
 pub mod bdd_minsol;
 pub mod bdd_dual;
@@ -48,13 +51,20 @@ pub mod bdd_prob;
 pub mod bdd_count;
 pub mod bdd_kofn;
 pub mod bss;
+pub mod zdd;
+pub mod zdd_count;
+pub mod zdd_path;
+pub(crate) mod zdd_convert;
 
 pub mod prelude {
     pub use bddcore::prelude::*;
+    pub use crate::bdd::*;
     pub use crate::bdd_path::*;
     pub use crate::bdd_minsol::*;
     pub use crate::bdd_dual::*;
     pub use crate::bdd_prob::*;
     pub use crate::bdd_count::*;
     pub use crate::bss::*;
+    pub use crate::zdd::*;
+    pub use crate::zdd_path::*;
 }

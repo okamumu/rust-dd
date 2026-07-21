@@ -1,3 +1,7 @@
+## relib-mss 0.9.0
+
+- Version bump for workspace lockstep; no functional changes. (`relib-mss`: the multi-state minsol/minpath is unchanged; the ZDD set-family work landed in `relib-bss` only.)
+
 ## relib-mss 0.8.0
 
 - Version bump for workspace lockstep; no functional changes. (`dual`/`mincut`

@@ -200,13 +200,12 @@ fn without(
         (Node::Zero, _) => dd.zero(),
         (_, Node::Zero) => f,
         (_, Node::One) => dd.zero(),
-        (Node::One, Node::NonTerminal(gnode)) => {
-            let headerid = gnode.headerid();
-            let gnodeid: Vec<_> = gnode.iter().collect();
-            let low = without(dd, f, gnodeid[0], cache);
-            let high = without(dd, f, gnodeid[1], cache);
-            dd.create_node(headerid, low, high)
-        }
+        // f = One is the family {∅}. `without(f, g)` keeps the sets of f that do
+        // not satisfy g. For a non-terminal (hence non-constant) monotone g,
+        // g(∅) = 0, so {∅} is kept unchanged — return One. Recursing over g's
+        // structure here (the previous behavior) fabricated spurious non-minimal
+        // sets (e.g. it made minpath(x&y|z) include {y,z}).
+        (Node::One, Node::NonTerminal(_gnode)) => f,
         (Node::NonTerminal(fnode), Node::NonTerminal(gnode)) if fnode.id() == gnode.id() => {
             dd.zero()
         }
