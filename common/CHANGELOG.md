@@ -1,3 +1,7 @@
+## relib-common 0.14.0
+
+- Version bump for workspace lockstep; no functional changes (the ZMDD family changes live in `relib-mdd`/`relib-mss`).
+
 ## relib-common 0.13.1
 
 - Version bump for workspace lockstep; no functional changes (the dot change lives in `relib-bdd`/`relib-mdd`).

@@ -184,6 +184,27 @@ where
     }
 
     #[inline]
+    /// Force the **baseline member** (the empty sparse vector, i.e. every component on the
+    /// 0-edge) into the family with terminal label `v`, and return the new root.
+    ///
+    /// The baseline vector is a member iff following 0-edges from the root reaches a terminal
+    /// rather than `Undet`; this rebuilds that spine so it does. It is a no-op when the member
+    /// is already there. Needed because a family converted from a **boolean** structure
+    /// function loses it (the source's `Zero` leaf is indistinguishable from "not a member"),
+    /// while one converted from a value forest keeps it.
+    pub fn set_baseline(&mut self, node: NodeId, v: V) -> NodeId {
+        match self.get_node(&node).unwrap() {
+            Node::Undet => self.value(v),
+            Node::Terminal(_) => node,
+            Node::NonTerminal(f) => {
+                let h = f.headerid();
+                let mut ch: Vec<NodeId> = f.iter().collect();
+                ch[0] = self.set_baseline(ch[0], v);
+                self.create_node(h, &ch)
+            }
+        }
+    }
+
     pub fn undet(&self) -> NodeId {
         self.undet
     }

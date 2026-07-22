@@ -1,3 +1,7 @@
+## relib-mdd 0.14.0
+
+- **New: `ZmddManager::set_baseline`** — force the baseline member (the empty sparse vector, i.e. every component on the 0-edge) into a family with a given terminal label, by rebuilding the 0-edge spine so it ends at a terminal instead of `Undet`. No-op when the member is already present. Used by `relib-mss` to make `minpath`/`mincut` families consistent: one converted from a boolean structure function used to lose that member (the source's `Zero` leaf is indistinguishable from "not a member"), while one converted from a value forest kept it.
+
 ## relib-mdd 0.13.1
 
 - **dot: the `Undet` terminal (`ZmddManager`, the empty family) and the edges into it are no longer drawn.** They carry no information and cluttered the diagram. The 0-*edge* is unaffected — in a zero-suppressed diagram it means "element/component not in the set" and is still drawn wherever it leads somewhere. The terminal is still rendered when it is the root itself, so an empty family does not become an empty graph.

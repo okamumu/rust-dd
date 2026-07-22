@@ -2,23 +2,25 @@ use std::collections::HashMap;
 
 use mss::prelude::*;
 
-/// `mincut(φ).extract([v])` must equal the **maximal elements of `{x : φ(x) ≤ v}`**, expressed
-/// sparsely (a component at its max state is unlisted). This is the multi-state minimal cut
-/// vector: the largest-from-top deviations that hold `φ` down to level `v`. Verified by brute
-/// force over all state vectors for the value forest (`max(min(x,y),z)`) and a boolean-forest
-/// structure function; also checks non-coherent → `None`.
+/// Every vector `mincut(φ).extract([v])` yields must satisfy the **definition** of a minimal
+/// cut vector at level `v`: `φ(x) == v`, and raising *any* single component by one state must
+/// push `φ` above `v` (maximality within `{x : φ(x) <= v}`). Conversely every genuine maximal
+/// cut vector must appear somewhere in the family.
+///
+/// This is checked directly rather than against a `{x : φ(x) <= v}` oracle, because the family
+/// files each vector under the label equal to its **own** `φ(x)`: a vector with `φ(x) < v` can
+/// be maximal within `{x : φ(x) <= v}` yet live in a lower stratum. `extract_level` is what
+/// reassembles the classical set — see `test_mincut_levels_vs_strata`.
 #[test]
 fn test_mincut_matches_bruteforce() {
     use std::collections::HashSet;
 
-    // Enumerate all assignments over vars, eval φ at each point, and return the mincut oracle:
-    // level v -> set of maximal elements of {x : φ(x) <= v}, as sorted sparse (var != max).
-    fn oracle(
+    // Enumerate every state vector and evaluate φ at each point via point-mass probabilities.
+    fn eval_all(
         node: &mut MddNode<i32>,
         vars: &[(&str, usize)],
         maxval: i32,
-    ) -> Vec<Vec<Vec<(String, usize)>>> {
-        // all assignments
+    ) -> Vec<(Vec<usize>, i32)> {
         let mut assigns: Vec<Vec<usize>> = vec![vec![]];
         for &(_, m) in vars {
             let mut next = Vec::new();
@@ -31,68 +33,68 @@ fn test_mincut_matches_bruteforce() {
             }
             assigns = next;
         }
-        // eval φ at each assignment via point-mass prob
-        let mut phi = |a: &[usize]| -> i32 {
-            let pv: std::collections::HashMap<String, Vec<f64>> = vars
-                .iter()
-                .zip(a.iter())
-                .map(|(&(name, m), &s)| {
-                    let mut e = vec![0.0; m];
-                    e[s] = 1.0;
-                    (name.to_string(), e)
-                })
-                .collect();
-            (0..=maxval).find(|&v| node.prob(&pv, &[v]) > 0.5).unwrap()
-        };
-        let phis: Vec<i32> = assigns.iter().map(|a| phi(a)).collect();
-        let geq = |a: &[usize], b: &[usize]| a.iter().zip(b).all(|(x, y)| x >= y);
-        let mut out = Vec::new();
-        for v in 0..=maxval {
-            let below: Vec<&Vec<usize>> = assigns
-                .iter()
-                .zip(phis.iter())
-                .filter(|(_, &p)| p <= v)
-                .map(|(a, _)| a)
-                .collect();
-            // maximal elements of `below`
-            let mut fam: Vec<Vec<(String, usize)>> = Vec::new();
-            for a in &below {
-                let maximal = !below
+        assigns
+            .into_iter()
+            .map(|a| {
+                let pv: HashMap<String, Vec<f64>> = vars
                     .iter()
-                    .any(|b| b.as_slice() != a.as_slice() && geq(b, a));
-                if maximal {
-                    let mut sparse: Vec<(String, usize)> = vars
-                        .iter()
-                        .zip(a.iter())
-                        .filter(|(&(_, m), &s)| s != m - 1) // unlisted = max
-                        .map(|(&(name, _), &s)| (name.to_string(), s))
-                        .collect();
-                    sparse.sort();
-                    // the all-max vector (empty deviation) is not a real cut
-                    if !sparse.is_empty() {
-                        fam.push(sparse);
-                    }
-                }
-            }
-            fam.sort();
-            out.push(fam);
-        }
-        out
+                    .zip(a.iter())
+                    .map(|(&(name, m), &s)| {
+                        let mut e = vec![0.0; m];
+                        e[s] = 1.0;
+                        (name.to_string(), e)
+                    })
+                    .collect();
+                let v = (0..=maxval).find(|&v| node.prob(&pv, &[v]) > 0.5).unwrap();
+                (a, v)
+            })
+            .collect()
     }
 
-    fn got(cut: &ZmddNode<i32>, v: i32) -> Vec<Vec<(String, usize)>> {
-        let ss: HashSet<i32> = [v].into_iter().collect();
-        let mut fam: Vec<Vec<(String, usize)>> = cut
-            .extract(&ss)
-            .map(|d| {
-                let mut e: Vec<(String, usize)> = d.into_iter().collect();
-                e.sort();
-                e
-            })
-            .filter(|e| !e.is_empty()) // the all-max vector is not a real cut
-            .collect();
-        fam.sort();
-        fam
+    fn check(node: &mut MddNode<i32>, cut: &ZmddNode<i32>, vars: &[(&str, usize)], maxval: i32) {
+        let table = eval_all(node, vars, maxval);
+        let phi = |x: &[usize]| table.iter().find(|(a, _)| a == x).unwrap().1;
+        let dense = |d: &HashMap<String, usize>| -> Vec<usize> {
+            vars.iter().map(|&(n, _)| d[n]).collect()
+        };
+
+        let mut returned: Vec<(Vec<usize>, i32)> = Vec::new();
+        for v in 0..=maxval {
+            let ss: HashSet<i32> = [v].into_iter().collect();
+            for d in cut.extract(&ss) {
+                let x = dense(&d);
+                // (1) the label is φ's own value at x
+                assert_eq!(phi(&x), v, "vector {x:?} filed under {v} but φ = {}", phi(&x));
+                // (2) x is maximal within {y : φ(y) <= v}: every +1 step exceeds v
+                for (i, &(_, m)) in vars.iter().enumerate() {
+                    if x[i] + 1 < m {
+                        let mut y = x.clone();
+                        y[i] += 1;
+                        assert!(
+                            phi(&y) > v,
+                            "vector {x:?} at level {v} is not maximal: raising component {i} \
+                             gives φ = {}",
+                            phi(&y)
+                        );
+                    }
+                }
+                returned.push((x, v));
+            }
+        }
+
+        // (3) nothing genuine is missing: every x that is maximal within {y : φ(y) <= φ(x)}
+        // must be in the family.
+        for (x, v) in &table {
+            let maximal = !table
+                .iter()
+                .any(|(y, w)| y != x && y.iter().zip(x).all(|(a, b)| a >= b) && w <= v);
+            if maximal {
+                assert!(
+                    returned.contains(&(x.clone(), *v)),
+                    "genuine maximal cut vector {x:?} (φ = {v}) missing from the family"
+                );
+            }
+        }
     }
 
     // value forest: max(min(x,y), z), K = 3
@@ -103,10 +105,7 @@ fn test_mincut_matches_bruteforce() {
         let z = m.defvar("z", 3);
         let mut phi = x.min(&y).max(&z);
         let cut = m.mincut(&phi).expect("coherent");
-        let orc = oracle(&mut phi, &[("x", 3), ("y", 3), ("z", 3)], 2);
-        for v in 0..=2 {
-            assert_eq!(got(&cut, v), orc[v as usize], "value-forest mincut at level {v}");
-        }
+        check(&mut phi, &cut, &[("x", 3), ("y", 3), ("z", 3)], 2);
     }
 
     // boolean forest: [x>=1] & [y>=2]  (Bool-tagged), K = 2 (values 0/1)
@@ -118,10 +117,20 @@ fn test_mincut_matches_bruteforce() {
         let two = m.value(2);
         let mut phi = x.ge(&one).and(&y.ge(&two));
         let cut = m.mincut(&phi).expect("coherent");
-        let orc = oracle(&mut phi, &[("x", 3), ("y", 3)], 1);
-        for v in 0..=1 {
-            assert_eq!(got(&cut, v), orc[v as usize], "bool-forest mincut at level {v}");
-        }
+        check(&mut phi, &cut, &[("x", 3), ("y", 3)], 1);
+    }
+
+    // asymmetric state counts, with a variable that forces φ to its minimum on its own.
+    // (This is the shape that exposes the stratum-vs-level distinction; see
+    // `test_mincut_levels_vs_strata`.)
+    {
+        let mut m: MssMgr<i32> = MssMgr::new();
+        let a = m.defvar("a", 2);
+        let b = m.defvar("b", 3);
+        let c = m.defvar("c", 3);
+        let mut phi = a.min(&b.max(&c));
+        let cut = m.mincut(&phi).expect("coherent");
+        check(&mut phi, &cut, &[("a", 2), ("b", 3), ("c", 3)], 2);
     }
 
     // non-coherent -> None
@@ -134,10 +143,72 @@ fn test_mincut_matches_bruteforce() {
     }
 }
 
-/// `bmeas[x][d]` must equal `P(φ∈ss | x=d+1) − P(φ∈ss | x=d)`, where each conditional is
-/// `prob` computed with `x` pinned to that state (its probability vector replaced by a unit
-/// vector). Verified for every (variable, transition) on both the value forest
-/// (`max(min(x,y),z)`) and the boolean forest (`[x>=1] & [y>=2]`).
+/// The family stratifies by the vector's **own** `φ(x)`, while the classical minimal cut
+/// vectors at level `v` are the maximal elements of `{x : φ(x) <= v}`. The two coincide at the
+/// extreme labels and differ in between; `extract_level` bridges them.
+///
+/// `φ = min(4a, b+c)` with `a` binary (= "a is down ⟹ the system is down"): `(0,2,2)` has
+/// `φ = 0`, so it sits in stratum 0, yet it stays maximal within `{x : φ(x) <= v}` for every
+/// `v < 4` and therefore belongs to levels 1..3 as well.
+#[test]
+fn test_mincut_levels_vs_strata() {
+    use std::collections::HashSet;
+
+    let mut m: MssMgr<i32> = MssMgr::new();
+    let a = m.defvar("a", 2);
+    let b = m.defvar("b", 3);
+    let c = m.defvar("c", 3);
+    let four = m.value(4);
+    let phi = a.mul(&four).min(&b.add(&c));
+    let cut = m.mincut(&phi).expect("coherent");
+
+    let names = ["a", "b", "c"];
+    let vecs = |it: Vec<HashMap<String, usize>>| {
+        let mut v: Vec<Vec<usize>> = it
+            .iter()
+            .map(|d| names.iter().map(|n| d[*n]).collect())
+            .collect();
+        v.sort();
+        v
+    };
+    let stratum = |v: i32| {
+        let ss: HashSet<i32> = [v].into_iter().collect();
+        vecs(cut.extract(&ss).collect())
+    };
+    let level = |v: i32| vecs(cut.extract_level(v));
+
+    assert!(cut.is_cut(), "mincut produces a cut family");
+    assert_eq!(cut.labels(), vec![0, 1, 2, 3, 4]);
+
+    // Stratum v holds only the vectors whose own φ is exactly v...
+    assert_eq!(stratum(1), vec![vec![1, 0, 1], vec![1, 1, 0]]);
+    // ...while level v is the classical maximal{x : φ(x) <= v}: (0,2,2) comes along from
+    // stratum 0, which the stratum reading alone misses.
+    assert_eq!(
+        level(1),
+        vec![vec![0, 2, 2], vec![1, 0, 1], vec![1, 1, 0]]
+    );
+    assert_eq!(
+        level(3),
+        vec![vec![0, 2, 2], vec![1, 1, 2], vec![1, 2, 1]]
+    );
+
+    // At the extreme labels the two agree: at the bottom because φ <= 0 ⟺ φ = 0, at the top
+    // because the all-max vector dominates everything else.
+    assert_eq!(stratum(0), level(0));
+    assert_eq!(stratum(4), level(4));
+    assert_eq!(stratum(4), vec![vec![1, 2, 2]], "the baseline member");
+
+    // Same distinction on the path side, mirrored (minimal{φ >= v}).
+    let path = m.minpath(&phi).expect("coherent");
+    assert!(!path.is_cut());
+    let pstratum = |v: i32| {
+        let ss: HashSet<i32> = [v].into_iter().collect();
+        vecs(path.extract(&ss).collect())
+    };
+    assert_eq!(pstratum(0), vec![vec![0, 0, 0]], "the baseline member");
+    assert_eq!(pstratum(0), vecs(path.extract_level(0)));
+}
 #[test]
 fn test_bmeas_matches_pinned_prob() {
     fn check(mgr_build: impl Fn(&mut MddMgr<i32>) -> MddNode<i32>, k: usize) {
@@ -330,7 +401,10 @@ fn test_zmdd_intersect_setdiff() {
     let inter = a.intersect(&b);
     assert_eq!(
         sorted_vecs(&inter, &ss),
-        vec![set(&[("x", 1), ("y", 1)]), set(&[("x", 2), ("y", 2)])]
+        vec![
+            set(&[("x", 1), ("y", 1), ("z", 0)]),
+            set(&[("x", 2), ("y", 2), ("z", 0)])
+        ]
     );
     assert_eq!(inter.count(&ss), 2);
 
@@ -338,7 +412,10 @@ fn test_zmdd_intersect_setdiff() {
     let diff = a.setdiff(&b);
     assert_eq!(
         sorted_vecs(&diff, &ss),
-        vec![set(&[("z", 1)]), set(&[("z", 2)])]
+        vec![
+            set(&[("x", 0), ("y", 0), ("z", 1)]),
+            set(&[("x", 0), ("y", 0), ("z", 2)])
+        ]
     );
     assert_eq!(diff.count(&ss), 2);
 }

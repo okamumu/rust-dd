@@ -1,3 +1,7 @@
+## relib-bdd 0.14.0
+
+- Version bump for workspace lockstep; no functional changes (the ZMDD family changes live in `relib-mdd`/`relib-mss`).
+
 ## relib-bdd 0.13.1
 
 - **dot: the `0` terminal (`ZddManager`, the empty family) and the edges into it are no longer drawn.** They carry no information and cluttered the diagram. The 0-*edge* is unaffected — in a zero-suppressed diagram it means "element/component not in the set" and is still drawn wherever it leads somewhere. The terminal is still rendered when it is the root itself, so an empty family does not become an empty graph.

@@ -151,6 +151,16 @@ recursion which is `O(2ⁿ)` (a fixed historical bug). Result is the canonical D
   can blow up. `maxsol` is the exact top-baseline mirror of `minsol` (baseline = top edge; filter
   via the *higher* cofactor), converted with edges reversed (`to_zmdd(reverse=true)`) into a cut
   `ZmddNode` (its `extract` lists deviations below max; terminal label = φ's own value).
+- **Stratum vs level** (`mss`, `ZmddNode`) — a `minpath`/`mincut` family files each vector under
+  the label equal to **its own `φ(x)`**, so `extract([v])` yields `minimal/maximal{x : φ(x) == v}`.
+  The classical `minimal{x : φ(x) >= v}` / `maximal{x : φ(x) <= v}` is `extract_level(v)`, which
+  unions the strata on the relevant side of `v` and drops the dominated vectors: a cut vector with
+  `φ(x) < v` can still be maximal within `{x : φ(x) <= v}` while living in a lower stratum. The two
+  readings agree at the extreme labels (there `φ >= v ⟺ φ == v`, resp. `φ <= v ⟺ φ == v`) and can
+  differ in between. `extract` reports **dense** vectors (unrecorded components at their baseline:
+  `0` for paths, max state for cuts — the rule flips with `is_cut`), and every family carries the
+  baseline member (all-0 / all-max), which is trivial but correct; `ZmddManager::set_baseline`
+  forces it in, since a family converted from a boolean forest would otherwise lose it.
 - **ZDD set families** (`bss` only, `BssMgr` + `zdd`/`zdd_convert`) — `BssMgr` owns a `BddMgr`
   and a `ZddMgr`; `minpath`/`mincut` compute the minsol in the BDD forest, then convert
   (private `zdd_convert::to_zdd`) into a genuine `ZddManager` and return a `ZddNode`. Set
@@ -279,7 +289,7 @@ still intend to use (the wrapper does this automatically via pinned handles). Th
 | logic (bool) | `and`, `or`, `xor`, `not`, `ite` |
 | analysis | `prob`, `bmeas` (Birnbaum importance), `mdd_count`/`mdd_extract`, `size` |
 | introspection | `get_id`, `get_id2`, `get_node`, `get_header`, `get_level`, `get_label`, `get_children`, `is_boolean/value/zero/one/undet`, `value`, `dot` |
-| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath`/`mincut` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `dot`, `size` (`ZmddNode`) |
+| ZMDD set family (`MssMgr` owns `MddMgr`+`ZmddMgr`; `ZmddNode`) | `minpath`/`mincut` (`MssMgr`); `intersect`, `setdiff`, `count`, `extract`, `extract_level`, `labels`, `is_cut`, `vars`, `dot`, `size` (`ZmddNode`) |
 
 Two API styles coexist (see `README.md`): an older `Context`-centric style and the current
 node-centric style (`mgr.getbdd(top).prob(...)` at the Python layer; `node.method()` here).

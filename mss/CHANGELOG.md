@@ -1,3 +1,13 @@
+## relib-mss 0.14.0
+
+- **Breaking: `ZmddNode::extract` now reports dense vectors.** Every variable of the structure function is present, with the components the diagram does not record filled in at their baseline — state `0` for a path family, the max state for a cut family. The baseline rule flips between the two, so the previous sparse output could not be read without knowing which family it came from.
+
+- **New: `ZmddNode::extract_level`** — the classical minimal path/cut vectors *at level* `v` (`minimal{x : φ(x) >= v}` / `maximal{x : φ(x) <= v}`). This is **not** what `extract([v])` returns: a family stratifies each vector under the label equal to its own `φ(x)`, so `extract([v])` is the `φ(x) == v` stratum. The two agree at the extreme labels (there `φ >= v ⟺ φ == v`, resp. `φ <= v ⟺ φ == v`) but differ in between — a cut vector with `φ(x) < v` can still be maximal within `{x : φ(x) <= v}`. The documentation previously described `extract` itself as the `<= v` reading, which was wrong; `test_mincut_matches_bruteforce` only passed because its structure functions happened not to distinguish the two. It is now a definition-based check (φ(x) == label, every +1 step exceeds the label, nothing genuine missing) plus a new `test_mincut_levels_vs_strata` regression on a function that does distinguish them.
+
+- **New: `ZmddNode::labels` / `is_cut` / `vars`** — the terminal labels the family stratifies over, whether it is a cut or path family, and the variables (with state counts) used to densify.
+
+- **Fixed: the baseline member is now always present.** A family from a boolean structure function used to lose the trivial all-0 (path) / all-max (cut) vector that a value-forest family kept. Both now carry it, at label `φ(0,..,0)` resp. `φ(max,..,max)`. It is a correct but trivial minimal vector, so callers usually skip it.
+
 ## relib-mss 0.13.1
 
 - `ZmddNode::dot` follows the `relib-mdd` change: the `Undet` terminal (the empty family) and the edges into it are omitted.

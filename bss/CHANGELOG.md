@@ -1,3 +1,9 @@
+## relib-bss 0.14.0
+
+- Version bump for workspace lockstep; no functional changes (the ZMDD family changes live in `relib-mdd`/`relib-mss`).
+
+- No change to `BssMgr::minpath`/`mincut`: with a two-valued structure function the stratum and level readings described in `relib-mss` coincide identically, and the `ZddNode` set representation is unchanged.
+
 ## relib-bss 0.13.1
 
 - `ZddNode::dot` follows the `relib-bdd` change: the `0` terminal (the empty family) and the edges into it are omitted.

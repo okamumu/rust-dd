@@ -61,34 +61,48 @@ where
         }
     }
 
-    fn wrap(&self, node: NodeId, reverse: bool) -> ZmddNode<V> {
-        let n = ZmddNode::new(&self.zmdd, &self.gc, node, reverse);
+    fn wrap(&self, node: NodeId, reverse: bool, vars: Rc<Vec<(String, usize)>>) -> ZmddNode<V> {
+        let n = ZmddNode::new(&self.zmdd, &self.gc, node, reverse, vars);
         maybe_gc(&self.zmdd, &self.gc);
         n
     }
 
     /// Convert a minsol result (the fake-ZMDD `Node` in a `MtMdd2Manager`) into a genuine
     /// ZMDD family in this manager. Used by [`MssMgr::minpath`](crate::mss::MssMgr::minpath).
-    pub(crate) fn convert(&self, src_rc: &Rc<RefCell<MtMdd2Manager<V>>>, node: &Node) -> ZmddNode<V> {
+    pub(crate) fn convert(
+        &self,
+        src_rc: &Rc<RefCell<MtMdd2Manager<V>>>,
+        node: &Node,
+        vars: Rc<Vec<(String, usize)>>,
+        baseline: V,
+    ) -> ZmddNode<V> {
         let id = {
             let src = src_rc.borrow();
             let mut dst = self.zmdd.borrow_mut();
-            zmdd_convert::to_zmdd(&src, node, &mut dst, false)
+            let id = zmdd_convert::to_zmdd(&src, node, &mut dst, false);
+            dst.set_baseline(id, baseline)
         };
-        self.wrap(id, false)
+        self.wrap(id, false, vars)
     }
 
     /// Convert a **maxsol** result (fake-ZMDD, baseline on the top edge) into a genuine ZMDD
     /// with edges reversed to bottom-baseline "levels below max" (`d`) coordinates. The
     /// resulting node is flagged `reverse`, so its `extract` reports each recorded component
     /// as the true state `edge_num-1 - d`. Used by [`MssMgr::mincut`](crate::mss::MssMgr::mincut).
-    pub(crate) fn convert_rev(&self, src_rc: &Rc<RefCell<MtMdd2Manager<V>>>, node: &Node) -> ZmddNode<V> {
+    pub(crate) fn convert_rev(
+        &self,
+        src_rc: &Rc<RefCell<MtMdd2Manager<V>>>,
+        node: &Node,
+        vars: Rc<Vec<(String, usize)>>,
+        baseline: V,
+    ) -> ZmddNode<V> {
         let id = {
             let src = src_rc.borrow();
             let mut dst = self.zmdd.borrow_mut();
-            zmdd_convert::to_zmdd(&src, node, &mut dst, true)
+            let id = zmdd_convert::to_zmdd(&src, node, &mut dst, true);
+            dst.set_baseline(id, baseline)
         };
-        self.wrap(id, true)
+        self.wrap(id, true, vars)
     }
 
     pub fn size(&self) -> (usize, usize, usize, usize) {
@@ -103,14 +117,22 @@ where
 /// A handle to a set family in a [`ZmddMgr`]'s forest.
 ///
 /// `reverse` distinguishes a **cut** family (`mincut`, edges reversed to "levels below max"
-/// coordinates) from a **path** family (`minpath`); it only affects how `extract` reports the
-/// per-component state (`true state = edge_num-1 - d` when reversed).
+/// coordinates) from a **path** family (`minpath`); it decides how `extract` reports the
+/// per-component state (`true state = edge_num-1 - d` when reversed) and which baseline the
+/// unrecorded components take (max state vs `0`). Query it with [`is_cut`](Self::is_cut).
+///
+/// The family is **stratified by the vector's own `φ(x)`** — see [`extract`](Self::extract)
+/// and [`extract_level`](Self::extract_level) — and always contains the baseline member (the
+/// all-0 vector for paths, the all-max vector for cuts), which is trivial but correct.
 #[derive(Debug)]
 pub struct ZmddNode<V> {
     parent: Weak<RefCell<ZmddManager<V>>>,
     gc: Weak<RefCell<GcState>>,
     node: NodeId,
     reverse: bool,
+    /// Every variable of the structure function with its number of states, as of the
+    /// `minpath`/`mincut` call. Used to fill in the components a sparse vector omits.
+    vars: Rc<Vec<(String, usize)>>,
 }
 
 impl<V> ZmddNode<V>
@@ -122,11 +144,12 @@ where
         gc: Weak<RefCell<GcState>>,
         node: NodeId,
         reverse: bool,
+        vars: Rc<Vec<(String, usize)>>,
     ) -> Self {
         if let Some(g) = gc.upgrade() {
             *g.borrow_mut().roots.entry(node).or_insert(0) += 1;
         }
-        ZmddNode { parent, gc, node, reverse }
+        ZmddNode { parent, gc, node, reverse, vars }
     }
 
     fn new(
@@ -134,12 +157,19 @@ where
         gc: &Rc<RefCell<GcState>>,
         node: NodeId,
         reverse: bool,
+        vars: Rc<Vec<(String, usize)>>,
     ) -> Self {
-        Self::from_weak(Rc::downgrade(zmdd), Rc::downgrade(gc), node, reverse)
+        Self::from_weak(Rc::downgrade(zmdd), Rc::downgrade(gc), node, reverse, vars)
     }
 
     fn rewrap(&self, zmdd: &Rc<RefCell<ZmddManager<V>>>, node: NodeId) -> Self {
-        let n = ZmddNode::from_weak(self.parent.clone(), self.gc.clone(), node, self.reverse);
+        let n = ZmddNode::from_weak(
+            self.parent.clone(),
+            self.gc.clone(),
+            node,
+            self.reverse,
+            self.vars.clone(),
+        );
         if let Some(gc) = self.gc.upgrade() {
             maybe_gc(zmdd, &gc);
         }
@@ -152,6 +182,76 @@ where
 
     pub fn get_id(&self) -> NodeId {
         self.node
+    }
+
+    /// `true` for a **cut** family (from [`MssMgr::mincut`](crate::mss::MssMgr::mincut)),
+    /// `false` for a **path** family (from [`MssMgr::minpath`](crate::mss::MssMgr::minpath)).
+    /// The two are read on opposite baselines — see [`extract`](Self::extract).
+    pub fn is_cut(&self) -> bool {
+        self.reverse
+    }
+
+    /// Every variable of the structure function with its number of states, as of the
+    /// `minpath`/`mincut` call.
+    pub fn vars(&self) -> &[(String, usize)] {
+        &self.vars
+    }
+
+    /// The terminal labels (performance values) this family stratifies over, ascending.
+    ///
+    /// A vector is filed under the label **equal to its own `φ(x)`**, so this is the set of
+    /// levels for which the family holds anything.
+    pub fn labels(&self) -> Vec<V> {
+        let mgr = self.parent.upgrade().unwrap();
+        let dd = mgr.borrow();
+        let mut seen = BddHashSet::default();
+        let mut out = Vec::new();
+        let mut stack = vec![self.node];
+        while let Some(id) = stack.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            match dd.get_node(&id).unwrap() {
+                ZNode::Undet => (),
+                ZNode::Terminal(t) => out.push(t.value()),
+                ZNode::NonTerminal(f) => stack.extend(f.iter()),
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// The **classical** minimal path / cut vectors *at level* `v`:
+    /// `minimal{x : φ(x) ≥ v}` for a path family, `maximal{x : φ(x) ≤ v}` for a cut family.
+    ///
+    /// [`extract`](Self::extract) alone answers a different question — it returns the stratum
+    /// whose `φ(x)` is **exactly** `v`. The classical set is the union of the strata on the
+    /// relevant side of `v` with the dominated vectors removed, which is what this does.
+    /// The two agree at the extreme labels but differ in between: for a cut family a vector
+    /// with `φ(x) < v` can still be maximal within `{x : φ(x) ≤ v}`, and it lives in a lower
+    /// stratum.
+    pub fn extract_level(&self, v: V) -> Vec<HashMap<String, usize>> {
+        let ss: HashSet<V> = self
+            .labels()
+            .into_iter()
+            .filter(|w| if self.reverse { *w <= v } else { *w >= v })
+            .collect();
+        let vectors: Vec<HashMap<String, usize>> = self.extract(&ss).collect();
+        // Keep the extreme elements: maximal for cuts, minimal for paths.
+        vectors
+            .iter()
+            .filter(|x| {
+                !vectors.iter().any(|y| {
+                    y != *x
+                        && self.vars.iter().all(|(n, _)| {
+                            let (a, b) = (y[n], x[n]);
+                            if self.reverse { a >= b } else { a <= b }
+                        })
+                })
+            })
+            .cloned()
+            .collect()
     }
 
     /// Label-wise intersection with another family from the same manager.
@@ -168,7 +268,8 @@ where
         self.rewrap(&zmdd, result)
     }
 
-    /// Number of sparse vectors whose terminal label is in `ss`.
+    /// Number of vectors whose terminal label is in `ss` (the strata selected by `ss`, see
+    /// [`extract`](Self::extract) — this counts the baseline member too).
     pub fn count(&self, ss: &HashSet<V>) -> u64 {
         let mgr = self.parent.upgrade().unwrap();
         let dd = mgr.borrow();
@@ -185,8 +286,17 @@ where
         dd.dot_string(&self.node)
     }
 
-    /// Enumerate the sparse vectors (as `{var: value}`, non-zero components only) whose
-    /// terminal label is in `ss`.
+    /// Enumerate the vectors whose terminal label is in `ss`.
+    ///
+    /// Vectors are **dense**: every variable of the structure function is present, with the
+    /// components the diagram does not record filled in at their baseline — state `0` for a
+    /// path family, the max state for a cut family (see [`is_cut`](Self::is_cut)). The
+    /// variable set is the one the MDD manager held when `minpath`/`mincut` ran, so a variable
+    /// irrelevant to `φ` is reported at its baseline rather than omitted.
+    ///
+    /// A vector is filed under the label equal to **its own `φ(x)`**, so `extract([v])` is
+    /// `minimal{x : φ(x) == v}` (paths) / `maximal{x : φ(x) == v}` (cuts). For the classical
+    /// `>= v` / `<= v` reading use [`extract_level`](Self::extract_level).
     pub fn extract(&self, ss: &HashSet<V>) -> ZmddPath<V> {
         ZmddPath::new(self.clone(), ss)
     }
@@ -197,7 +307,13 @@ where
     V: MddValue,
 {
     fn clone(&self) -> Self {
-        ZmddNode::from_weak(self.parent.clone(), self.gc.clone(), self.node, self.reverse)
+        ZmddNode::from_weak(
+            self.parent.clone(),
+            self.gc.clone(),
+            self.node,
+            self.reverse,
+            self.vars.clone(),
+        )
     }
 }
 
@@ -258,6 +374,9 @@ enum SV {
 pub struct ZmddPath<V> {
     stack: Vec<SV>,
     path: HashMap<String, usize>,
+    /// The baseline value of every variable: `0` for a path family, `states-1` for a cut
+    /// family. `path` starts here and a component reverts to it when the walk backtracks.
+    baseline: HashMap<String, usize>,
     node: ZmddNode<V>,
     ss: HashSet<V>,
     reverse: bool,
@@ -271,9 +390,15 @@ where
         let mut stack = Vec::new();
         stack.push(SV::Node(node.get_id()));
         let reverse = node.reverse;
+        let baseline: HashMap<String, usize> = node
+            .vars
+            .iter()
+            .map(|(n, states)| (n.clone(), if reverse { states - 1 } else { 0 }))
+            .collect();
         ZmddPath {
             stack,
-            path: HashMap::new(),
+            path: baseline.clone(),
+            baseline,
             node,
             ss: ss.clone(),
             reverse,
@@ -319,7 +444,12 @@ where
                     self.path.insert(x, i);
                 }
                 SV::Pop(x) => {
-                    self.path.remove(&x);
+                    // Restore the baseline rather than dropping the key: every vector is
+                    // reported dense, with each unrecorded component at its baseline.
+                    match self.baseline.get(&x) {
+                        Some(&b) => self.path.insert(x, b),
+                        None => self.path.remove(&x),
+                    };
                 }
             }
         }
